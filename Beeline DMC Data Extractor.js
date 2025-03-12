@@ -1,15 +1,15 @@
 // ==UserScript==
 // @name         Beeline DMC Data Extractor
 // @namespace    http://tampermonkey.net/
-// @version      6.0
+// @version      6.0.1
 // @description  Извлечение данных о проектах и задачах после авторизации
 // @author       zOn
 // @match        https://dmc.beeline.ru/projects
 // @match        https://dmc.beeline.ru/processes
 // @grant        none
 // @icon         https://www.google.com/s2/favicons?domain=beeline.ru
-// @updateURL    https://github.com/zOnVolga/DMC_scripts/blob/main/Beeline%20DMC%20Data%20Extractor.js
-// @downloadURL  https://github.com/zOnVolga/DMC_scripts/blob/main/Beeline%20DMC%20Data%20Extractor.js
+// @updateURL    https://raw.githubusercontent.com/zOnVolga/DMC_scripts/refs/heads/main/Beeline%20DMC%20Data%20Extractor.js?token=GHSAT0AAAAAADANHRJXJVSMOVEJC24Q767CZ6R5FVQ
+// @downloadURL  https://raw.githubusercontent.com/zOnVolga/DMC_scripts/refs/heads/main/Beeline%20DMC%20Data%20Extractor.js?token=GHSAT0AAAAAADANHRJXJVSMOVEJC24Q767CZ6R5FVQ
 // ==/UserScript==
 
 (function () {
