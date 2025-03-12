@@ -8,8 +8,8 @@
 // @match        https://dmc.beeline.ru/processes
 // @grant        none
 // @icon         https://www.google.com/s2/favicons?domain=beeline.ru
-// @updateURL    https://drive.google.com/file/d/1becIzUXnp0XZoxUthDG-CbcQAAklJI68/view?usp=sharing
-// @downloadURL  https://drive.google.com/file/d/1becIzUXnp0XZoxUthDG-CbcQAAklJI68/view?usp=sharing
+// @updateURL    https://github.com/zOnVolga/DMC_scripts/blob/main/Beeline%20DMC%20Data%20Extractor.js
+// @downloadURL  https://github.com/zOnVolga/DMC_scripts/blob/main/Beeline%20DMC%20Data%20Extractor.js
 // ==/UserScript==
 
 (function () {
