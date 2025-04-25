@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Beeline DMC Data Extractor
 // @namespace    http://tampermonkey.net/
-// @version      7.0.3
+// @version      7.0.4
 // @description  Извлечение данных о проектах и задачах после авторизации
 // @author       zOn
 // @match        https://dmc.beeline.ru/projects
@@ -633,13 +633,16 @@
     
                 let value;
                 if (type === 'project') {
-                    if (geoMatch) {
-                        const [lat, lng] = geoMatch[1].split(' '); // Разделяем координаты
-                        const projectCoords = `${lng},${lat}`; // Меняем порядок: долгота,широта
-                        const link = document.createElement('a');
-                        link.href = `https://yandex.ru/maps/?pt=${projectCoords}&z=16&l=skl`;
-                        link.textContent = `${projectCoords}`;
-                        span.appendChild(link);
+                    if (header === 'geo') {
+                        const match = item[header]?.match(/\(([^)]+)\)/);
+                        if (match) {
+                            const coords = match[1].split(' ');
+                            const lat = coords[0]; // Широта
+                            const lng = coords[1]; // Долгота
+                            const link = document.createElement('a');
+                            link.href = `https://yandex.ru/maps/?pt=${lat},${lng}&z=16&l=skl`;
+                            link.textContent = `${lat},${lng}`;
+                            span.appendChild(link);
                         } else {
                             span.textContent = item[header] || '';
                         }
@@ -648,7 +651,13 @@
                         const branchCoords = branchCoordinates[branchName];
     
                         const geoMatch = item.geo?.match(/\(([^)]+)\)/);
-                        const projectCoords = geoMatch ? geoMatch[1].split(' ').join(',') : '';
+                        let projectCoords = '';
+                        if (geoMatch) {
+                            const coords = geoMatch[1].split(' ');
+                            const lat = coords[0]; // Широта
+                            const lng = coords[1]; // Долгота
+                            projectCoords = `${lng},${lat}`; // Меняем порядок: долгота,широта
+                        }
     
                         if (header === 'route_LL') {
                             // Логика для Доставки
@@ -679,6 +688,10 @@
                                 span.textContent = ''; // Если координаты отсутствуют, оставляем пустым
                             }
                         }
+                    } else if (header === 'hight_object') {
+                        // Замена точки на запятую для "Высоты объекта"
+                        value = item[header] ? item[header].toString().replace('.', ',') : '';
+                        span.textContent = value;
                     } else {
                         span.textContent = item[header] || '';
                     }
