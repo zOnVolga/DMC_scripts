@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Beeline DMC Data Extractor
 // @namespace    http://tampermonkey.net/
-// @version      6.0.1
+// @version      7.0.0
 // @description  Извлечение данных о проектах и задачах после авторизации
 // @author       zOn
 // @match        https://dmc.beeline.ru/projects
@@ -546,13 +546,12 @@
             console.error('❌ Ошибка при получении данных о задачах:', error);
         }
     }
-
     // Функция для создания таблицы из данных
     function createTableFromData(data, type) {
         const table = document.createElement('table');
         table.setAttribute('cellspacing', '0');
         table.setAttribute('class', 'style__TableStyled-sc-1c82g3t-0 cobzxA');
-
+    
         let headers;
         if (type === 'project') {
             headers = [
@@ -574,6 +573,8 @@
                 'bs_gfk',
                 'rru_gfk',
                 'geo',
+                'route_LL', // Новый столбец: Доставка
+                'route_PPO', // Новый столбец: Обследование
                 'statuses_project',
                 'pos_code',
                 'prime_contractors',
@@ -601,10 +602,9 @@
                 'status'
             ];
         }
-
+    
         const headerRow = document.createElement('tr');
         headerRow.setAttribute('class', 'style__TableStringStyled-sc-1c82g3t-1 hwrWAV');
-
         headers.forEach(header => {
             const th = document.createElement('td');
             th.setAttribute('width', 'calc(110 / 1900 * 100%)');
@@ -618,134 +618,85 @@
             th.appendChild(div);
             headerRow.appendChild(th);
         });
-
         table.appendChild(headerRow);
-
+    
         data.forEach(item => {
             const row = document.createElement('tr');
             row.setAttribute('class', 'style__TableStringStyled-sc-1c82g3t-1 hwrWAV style__ProjectString-sc-hfirfp-1 hNFYXu');
-
             headers.forEach(header => {
                 const td = document.createElement('td');
                 td.setAttribute('class', 'style__TableCellStyled-sc-1c82g3t-3 lguZrP');
                 const div = document.createElement('div');
                 div.setAttribute('class', 'style__TableCellContentStyled-sc-1c82g3t-5 ePYmXN');
                 const span = document.createElement('span');
-
+    
                 let value;
-
-                if (type === 'task') {
-                    switch (header) {
-                        case 'user_position':
-                            value = item.user?.position || '';
-                            break;
-                        case 'user_short_name':
-                            value = item.user?.short_name || '';
-                            break;
-                        case 'project_number':
-                            value = item.project_bs?.project_number || '';
-                            break;
-                        case 'bs_number':
-                            value = item.project_bs?.bs_number || '';
-                            break;
-                        case 'bs_name':
-                            value = item.project_bs?.bs_name || '';
-                            break;
-                        case 'bs_address':
-                            value = item.project_bs?.bs_address || '';
-                            break;
-                        case 'project_type':
-                            value = item.project_bs?.project_type || '';
-                            break;
-                        case 'gfk':
-                            value = item.project_bs?.gfk || '';
-                            break;
-                        case 'branch':
-                            value = item.branch || '';
-                            break;
-                        case 'region':
-                            value = item.region || '';
-                            break;
-                        case 'status':
-                            value = getStatusName(item.status);
-                            break;
-                        case 'object_number':
-                            value = item.object?.number || '';
-                            break;
-                        case 'object_name':
-                            value = item.object?.name || '';
-                            break;
-                        case 'object_status_name':
-                            value = item.object?.status?.name || '';
-                            break;
-                        case 'created_at':
-                            value = item.created_at ? item.created_at.substring(0, 10) : ''; // Берем первые 10 символов (дата)
-                            break;
-                        default:
-                            value = item[header] || '';
-                            break;
-                    }
-                } else {
-                    if (header === 'hight_object') {
-                        value = item[header] ? item[header].toString().replace('.', ',') : '';
-                    } else {
-                        value = item[header] || '';
-                    }
-                }
-
-                if (header === 'id' || header === 'project_number') {
-                    const link = document.createElement('a');
-                    link.href = `https://dmc.beeline.ru/projects/${item[header]}`;
-                    link.textContent = value;
-                    span.appendChild(link);
-                } else if (header === 'geo') {
-                    const match = item[header]?.match(/\(([^)]+)\)/);
-                    if (match) {
-                        const coords = match[1].split(' ');
-                        const lat = coords[0];
-                        const lng = coords[1];
-                        const link = document.createElement('a');
-                        link.href = `https://yandex.ru/maps/?pt=${lat},${lng}&z=16&l=skl`;
-                        link.textContent = `${lat},${lng}`;
-                        span.appendChild(link);
+                if (type === 'project') {
+                    if (header === 'geo') {
+                        const match = item[header]?.match(/\(([^)]+)\)/);
+                        if (match) {
+                            const coords = match[1].split(' ');
+                            const lat = coords[0];
+                            const lng = coords[1];
+                            const link = document.createElement('a');
+                            link.href = `https://yandex.ru/maps/?pt=${lat},${lng}&z=16&l=skl`;
+                            link.textContent = `${lat},${lng}`;
+                            span.appendChild(link);
+                        } else {
+                            span.textContent = item[header] || '';
+                        }
+                    } else if (header === 'route_LL' || header === 'route_PPO') {
+                        const branchName = item.branch_name; // Предполагается, что в данных есть поле с названием филиала
+                        const branchCoords = branchCoordinates[branchName];
+    
+                        const geoMatch = item.geo?.match(/\(([^)]+)\)/);
+                        const projectCoords = geoMatch ? geoMatch[1].split(' ').join(',') : '';
+    
+                        if (header === 'route_LL') {
+                            // Логика для Доставки
+                            if (branchCoords && branchCoords.delivery && projectCoords) {
+                                const deliveryCoords = branchCoords.delivery;
+                                const url = `https://yandex.ru/maps/?rtext=${deliveryCoords}~${projectCoords}&mode=routes&routes%5Bavoid%5D=tolls%2Cunpaved%2Cpoor_condition&rtm=atm&rtt=auto&ruri=~`;
+    
+                                const link = document.createElement('a');
+                                link.href = url;
+                                link.textContent = 'Доставка ->>>';
+                                link.target = '_blank';
+                                span.appendChild(link);
+                            } else {
+                                span.textContent = ''; // Если координаты отсутствуют, оставляем пустым
+                            }
+                        } else if (header === 'route_PPO') {
+                            // Логика для Обследования
+                            if (branchCoords && branchCoords.survey && projectCoords) {
+                                const surveyCoords = branchCoords.survey;
+                                const url = `https://yandex.ru/maps/?rtext=${surveyCoords}~${projectCoords}&mode=routes&routes%5Bavoid%5D=tolls%2Cunpaved%2Cpoor_condition&rtm=atm&rtt=auto&ruri=~`;
+    
+                                const link = document.createElement('a');
+                                link.href = url;
+                                link.textContent = 'Обсл-е ->>>';
+                                link.target = '_blank';
+                                span.appendChild(link);
+                            } else {
+                                span.textContent = ''; // Если координаты отсутствуют, оставляем пустым
+                            }
+                        }
                     } else {
                         span.textContent = item[header] || '';
                     }
-                } else if (header === 'object_number') {
-                    const link = document.createElement('a');
-                    const isNumeric = /^\d+$/.test(value);
-                    const objectName = item.object?.name || '';
-                    const objectNumber = item.object?.number || '';
-
-                    if (isNumeric) {
-                        if (objectName.startsWith('Зад')) {
-                            link.href = `https://dmc.beeline.ru/jobs/${item.object.id}`;
-                        } else {
-                            link.href = `https://dmc.beeline.ru/documents/${item.object.id}`;
-                        }
-                    } else if (objectNumber.startsWith('ВВР')) {
-                        link.href = `https://dmc.beeline.ru/completed-works/${item.object.id}`;
-                    } else {
-                        link.href = `https://dmc.beeline.ru/additional-agreements/${item.object.id}`;
-                    }
-
-                    link.textContent = value;
-                    span.appendChild(link);
                 } else {
-                    span.textContent = value;
+                    span.textContent = item[header] || '';
                 }
-
+    
                 div.appendChild(span);
                 td.appendChild(div);
                 row.appendChild(td);
             });
-
             table.appendChild(row);
         });
-
+    
         return table.outerHTML;
     }
-
     // Функция для перевода кода статуса в текстовое значение
     function getStatusName(code) {
         const statusMap = {
