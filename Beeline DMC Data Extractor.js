@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Beeline DMC Data Extractor
 // @namespace    http://tampermonkey.net/
-// @version      7.0.0
+// @version      7.0.1
 // @description  Извлечение данных о проектах и задачах после авторизации
 // @author       zOn
 // @match        https://dmc.beeline.ru/projects
@@ -546,12 +546,13 @@
             console.error('❌ Ошибка при получении данных о задачах:', error);
         }
     }
+
     // Функция для создания таблицы из данных
     function createTableFromData(data, type) {
         const table = document.createElement('table');
         table.setAttribute('cellspacing', '0');
         table.setAttribute('class', 'style__TableStyled-sc-1c82g3t-0 cobzxA');
-    
+
         let headers;
         if (type === 'project') {
             headers = [
@@ -602,7 +603,7 @@
                 'status'
             ];
         }
-    
+
         const headerRow = document.createElement('tr');
         headerRow.setAttribute('class', 'style__TableStringStyled-sc-1c82g3t-1 hwrWAV');
         headers.forEach(header => {
@@ -619,7 +620,7 @@
             headerRow.appendChild(th);
         });
         table.appendChild(headerRow);
-    
+
         data.forEach(item => {
             const row = document.createElement('tr');
             row.setAttribute('class', 'style__TableStringStyled-sc-1c82g3t-1 hwrWAV style__ProjectString-sc-hfirfp-1 hNFYXu');
@@ -629,7 +630,7 @@
                 const div = document.createElement('div');
                 div.setAttribute('class', 'style__TableCellContentStyled-sc-1c82g3t-5 ePYmXN');
                 const span = document.createElement('span');
-    
+
                 let value;
                 if (type === 'project') {
                     if (header === 'geo') {
@@ -646,18 +647,18 @@
                             span.textContent = item[header] || '';
                         }
                     } else if (header === 'route_LL' || header === 'route_PPO') {
-                        const branchName = item.branch_name; // Предполагается, что в данных есть поле с названием филиала
+                        const branchName = item.branch; // Предполагается, что в данных есть поле с названием филиала
                         const branchCoords = branchCoordinates[branchName];
-    
+
                         const geoMatch = item.geo?.match(/\(([^)]+)\)/);
                         const projectCoords = geoMatch ? geoMatch[1].split(' ').join(',') : '';
-    
+
                         if (header === 'route_LL') {
                             // Логика для Доставки
                             if (branchCoords && branchCoords.delivery && projectCoords) {
                                 const deliveryCoords = branchCoords.delivery;
                                 const url = `https://yandex.ru/maps/?rtext=${deliveryCoords}~${projectCoords}&mode=routes&routes%5Bavoid%5D=tolls%2Cunpaved%2Cpoor_condition&rtm=atm&rtt=auto&ruri=~`;
-    
+
                                 const link = document.createElement('a');
                                 link.href = url;
                                 link.textContent = 'Доставка ->>>';
@@ -671,7 +672,7 @@
                             if (branchCoords && branchCoords.survey && projectCoords) {
                                 const surveyCoords = branchCoords.survey;
                                 const url = `https://yandex.ru/maps/?rtext=${surveyCoords}~${projectCoords}&mode=routes&routes%5Bavoid%5D=tolls%2Cunpaved%2Cpoor_condition&rtm=atm&rtt=auto&ruri=~`;
-    
+
                                 const link = document.createElement('a');
                                 link.href = url;
                                 link.textContent = 'Обсл-е ->>>';
@@ -687,16 +688,17 @@
                 } else {
                     span.textContent = item[header] || '';
                 }
-    
+
                 div.appendChild(span);
                 td.appendChild(div);
                 row.appendChild(td);
             });
             table.appendChild(row);
         });
-    
+
         return table.outerHTML;
     }
+
     // Функция для перевода кода статуса в текстовое значение
     function getStatusName(code) {
         const statusMap = {
@@ -727,7 +729,7 @@
         rows.forEach(row => {
             const cells = row.querySelectorAll('td');
             cells.forEach((cell, index) => {
-                if (type === 'project' && index >= 22) { // Удаляем все столбцы после 22-го для проектов
+                if (type === 'project' && index >= 24) { // Удаляем все столбцы после 22-го для проектов
                     cell.remove();
                 }
             });
@@ -757,6 +759,8 @@
                 'Код ГФК',
                 'Код ГФК транспорт',
                 'Координаты',
+                'Доставка',
+                'Обследование',
                 'Статус',
                 'Номер позиции',
                 'Основной ГПО',
