@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Beeline DMC Data Extractor
 // @namespace    http://tampermonkey.net/
-// @version      7.0.4
+// @version      7.0.5
 // @description  Извлечение данных о проектах и задачах после авторизации
 // @author       zOn
 // @match        https://dmc.beeline.ru/projects
@@ -280,8 +280,8 @@
         const sfSwitch = createSwitch('sf', filter_dvf, 'СФ');
         const ufSwitch = createSwitch('uf', filter_dvf, 'УФ');
         const cfSwitch = createSwitch('cf', filter_cf, 'ЦФ');
-        container.appendChild(southSwitch);
         container.appendChild(volgaSwitch);
+        container.appendChild(southSwitch);
         container.appendChild(szSwitch);
         container.appendChild(skSwitch);
         container.appendChild(dvfSwitch);
