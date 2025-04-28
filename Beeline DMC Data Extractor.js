@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Beeline DMC Data Extractor
 // @namespace    http://tampermonkey.net/
-// @version      7.0.5
+// @version      7.0.6
 // @description  Извлечение данных о проектах и задачах после авторизации
 // @author       zOn
 // @match        https://dmc.beeline.ru/projects
