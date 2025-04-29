@@ -17,34 +17,35 @@ jobs:
       - name: Показать список файлов
         run: ls -la
 
-      - name: Установить Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '18'
-
-      - name: Выполнить сборку
+      - name: Загрузить исходный файл вручную
         run: |
-          # Путь к исходному скрипту и целевому
+          # URL с URL-encoded именем
+          INPUT_SCRIPT_URL="https://raw.githubusercontent.com/zOnVolga/DMC_scripts/main/Beeline%20DMC%20Data%20Extractor.js"
           INPUT_SCRIPT="Beeline DMC Data Extractor.js"
           OUTPUT_SCRIPT="Beeline-DMC-Data-Extractor.auto.user.js"
 
-          # Проверяем наличие файла
+          # Скачиваем файл вручную
+          curl -s -o "$INPUT_SCRIPT" "$INPUT_SCRIPT_URL"
+
+          # Проверяем, что файл существует
           if [ ! -f "$INPUT_SCRIPT" ]; then
-            echo "❌ Файл $INPUT_SCRIPT не найден!"
+            echo "❌ Файл $INPUT_SCRIPT не скачался!"
             exit 1
           fi
 
-          # Получаем текущую версию из @version
+          echo "✅ Файл успешно скачан"
+
+          # Получаем версию из @version
           VERSION=$(grep -oP '@version\\s+\\K[^ ]+' "$INPUT_SCRIPT")
 
           echo "Текущая версия: $VERSION"
 
-          # Вставляем автоапдейтер и обновляем метаданные
+          # Генерируем .user.js с автоапдейтером
           cat > "$OUTPUT_SCRIPT" << EOF
           // ==UserScript==
           // @name         Beeline DMC Data Extractor + AutoUpdater
           // @namespace    http://tampermonkey.net/
-          // @version      $VERSION
+          // @version      \$VERSION
           // @description  Извлечение данных из Beeline DMC с возможностью автообновления и уведомлением о последнем коммите
           // @author       zOnVolga
           // @match        https://dmc.beeline.ru/*
@@ -61,7 +62,7 @@ jobs:
 
           (function() {
               'use strict';
-              console.log("Beeline DMC Data Extractor Auto v$VERSION");
+              console.log("Beeline DMC Data Extractor Auto v\$VERSION");
           })();
 
           // === [Автоапдейтер] ===
@@ -147,11 +148,14 @@ jobs:
           })();
           EOF
 
+          # Меняем \$VERSION на реальную
+          sed -i "s/\\\$VERSION/\$VERSION/g" "$OUTPUT_SCRIPT"
+
       - name: Зафиксировать изменения
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add "$OUTPUT_SCRIPT" && git commit -m "Обновлено: $OUTPUT_SCRIPT" || echo "Нет изменений для фиксации"
+          git add "*.user.js" && git commit -m "Собранный скрипт обновлён" || echo "Нет изменений для фиксации"
 
       - name: Залить изменения
         uses: ad-m/github-push-action@master
