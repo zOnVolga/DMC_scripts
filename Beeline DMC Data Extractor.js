@@ -10,6 +10,8 @@
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @connect      raw.githubusercontent.com
+// @downloadURL  https://raw.githubusercontent.com/zOnVolga/DMC_scripts/main/Beeline%20DMC%20Data%20Extractor.js
+// @updateURL    https://raw.githubusercontent.com/zOnVolga/DMC_scripts/main/Beeline%20DMC%20Data%20Extractor.js
 // @connect      api.github.com
 // @icon         https://raw.githubusercontent.com/zOnVolga/DMC_scripts/main/icon-beeline.svg
 // ==/UserScript==
