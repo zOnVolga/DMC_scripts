@@ -26,6 +26,8 @@
 #### 🖱️ Установка:
 [![Install Script](https://img.shields.io/badge/-Установить-success)](https://raw.githubusercontent.com/zOnVolga/DMC_scripts/main/Beeline%20DMC%20Data%20Extractor.js)
 
+[![Install Script](https://img.shields.io/badge/-Обновить-blue)](https://raw.githubusercontent.com/zOnVolga/DMC_scripts/main/Beeline%20DMC%20Data%20Extractor.js)
+
 👉 После установки скрипт будет автоматически проверять наличие обновлений раз в 6 часов.
 
 ---
