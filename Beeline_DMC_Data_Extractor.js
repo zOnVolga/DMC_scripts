@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Beeline DMC Data Extractor + AutoUpdater (v7.1.3)
+// @name         Beeline DMC Data Extractor + AutoUpdater
 // @namespace    http://tampermonkey.net/
-// @version      7.1.3
+// @version      7.1.4
 // @description  Извлечение данных из Beeline DMC с возможностью автообновления и уведомлением о последнем коммите
 // @author       zOnVolga
 // @match        https://dmc.beeline.ru/*
@@ -814,104 +814,3 @@
         return table.outerHTML;
     }
 })();
-
-// === [Автоапдейтер] ===
-(function checkForUpdates() {
-    const scriptName = 'Beeline DMC Data Extractor';
-    const repoOwner = 'zOnVolga';
-    const repoName = 'DMC_scripts';
-    const filePath = 'Beeline_DMC_Data_Extractor.js'; // URL-encoded filename
-    const rawUrl = `https://raw.githubusercontent.com/${repoOwner}/${repoName}/main/${filePath}`;
-    const apiUrl = `https://api.github.com/repos/${repoOwner}/${repoName}/commits?path=${encodeURIComponent(filePath)}&page=1&per_page=1`;
-
-    function getVersionFromString(content) {
-        const versionMatch = content.match(/\/\/\s*@version\s*([0-9.\-]+)/);
-        return versionMatch ? versionMatch[1].trim() : null;
-    }
-
-    function compareVersions(v1, v2) {
-        const parts1 = v1.split('.').map(Number);
-        const parts2 = v2.split('.').map(Number);
-        for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
-            if ((parts1[i] || 0) > (parts2[i] || 0)) return 1;
-            if ((parts1[i] || 0) < (parts2[i] || 0)) return -1;
-        }
-        return 0;
-    }
-
-    GM_xmlhttpRequest({
-        method: 'GET',
-        url: rawUrl,
-        onload: function(response) {
-            if (response.status === 200) {
-                const remoteVersion = getVersionFromString(response.responseText);
-                const localVersion = GM_getValue('localVersion', '0.0.0');
-
-                console.log('[Автоапдейтер] Версии:');
-                console.log('Remote version:', remoteVersion);
-                console.log('Local version:', localVersion);
-
-                if (!remoteVersion) {
-                    console.error('Не найдена версия в удаленном скрипте');
-                    return;
-                }
-
-                if (compareVersions(remoteVersion, localVersion) > 0) {
-                    console.log(`Доступна новая версия: ${remoteVersion} (твоя: ${localVersion})`);
-
-                    fetch(apiUrl)
-                        .then(res => res.json())
-                        .then(commits => {
-                            if (commits.length > 0) {
-                                const commit = commits[0];
-                                const shaShort = commit.sha.substring(0, 7);
-                                const message = commit.commit.message;
-                                const author = commit.author?.login || commit.commit.author.name;
-                                const date = new Date(commit.commit.author.date).toLocaleString();
-
-                                GM_notification({
-                                    title: 'Доступно обновление',
-                                    text: `${scriptName} v${remoteVersion}\n\n"${message}"\nАвтор: ${author}\nДата: ${date}\n→ Нажми, чтобы обновить`,
-                                    timeout: 15,
-                                    onclick: () => window.open(rawUrl)
-                                });
-
-                            } else {
-                                GM_notification({
-                                    title: 'Обновление доступно',
-                                    text: `${scriptName} v${remoteVersion}\nНажми, чтобы открыть скрипт и обновить.`,
-                                    timeout: 10,
-                                    onclick: () => window.open(rawUrl)
-                                });
-                            }
-                        })
-                        .catch(err => {
-                            console.error('Ошибка при получении информации о коммите:', err);
-                        });
-
-                } else {
-                    console.log(`Текущая версия актуальна: ${localVersion}`);
-                }
-            }
-        },
-        onerror: function(err) {
-            console.error('Ошибка при проверке обновления:', err);
-        }
-    });
-
-    // Сохраняем текущую версию из скрипта
-    const thisScriptVersion = getVersionFromString(document.currentScript.textContent);
-    const currentVersion = GM_getValue('localVersion', '0.0.0');
-
-    if (thisScriptVersion && compareVersions(thisScriptVersion, currentVersion) > 0) {
-        GM_setValue('localVersion', thisScriptVersion.trim());
-        console.log(`✅ Обнаружена новая локальная версия: ${thisScriptVersion}`);
-    } else if (thisScriptVersion && thisScriptVersion !== currentVersion) {
-        console.warn(`ℹ️ Версия скрипта (${thisScriptVersion}) не совпадает с сохранённой (${currentVersion}), но не выше`);
-    } else {
-        console.log(`✅ Локальная версия актуальна: ${currentVersion}`);
-    }
-
-    // Проверять каждые 6 часов
-    setTimeout(checkForUpdates, 6 * 60 * 60 * 1000);
-})(); 
