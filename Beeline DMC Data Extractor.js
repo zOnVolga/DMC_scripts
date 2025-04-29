@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Beeline DMC Data Extractor + AutoUpdater (с коммитами)
 // @namespace    http://tampermonkey.net/
-// @version      7.1.2
+// @version      7.1.3
 // @description  Извлечение данных из Beeline DMC с возможностью автообновления и уведомлением о последнем коммите
 // @author       zOnVolga
 // @match        https://dmc.beeline.ru/*
@@ -826,7 +826,7 @@
 
     function getVersionFromString(content) {
         const versionMatch = content.match(/\/\/\s*@version\s*([0-9.\-]+)/);
-        return versionMatch ? versionMatch[1] : null;
+        return versionMatch ? versionMatch[1].trim() : null;
     }
 
     function compareVersions(v1, v2) {
@@ -844,8 +844,13 @@
         url: rawUrl,
         onload: function(response) {
             if (response.status === 200) {
-                const remoteVersion = getVersionFromString(response.responseText);
+                const remoteContent = response.responseText;
+                const remoteVersion = getVersionFromString(remoteContent);
                 const localVersion = GM_getValue('localVersion', '0.0.0');
+
+                console.log('[Автоапдейтер] Версии:');
+                console.log('Remote version:', remoteVersion);
+                console.log('Local version:', localVersion);
 
                 if (!remoteVersion) {
                     console.error('Не найдена версия в удаленном скрипте');
@@ -855,7 +860,6 @@
                 if (compareVersions(remoteVersion, localVersion) > 0) {
                     console.log(`Доступна новая версия: ${remoteVersion} (твоя: ${localVersion})`);
 
-                    // Загружаем информацию о последнем коммите
                     fetch(apiUrl)
                         .then(res => res.json())
                         .then(commits => {
@@ -866,16 +870,14 @@
                                 const author = commit.author?.login || commit.commit.author.name;
                                 const date = new Date(commit.commit.author.date).toLocaleString();
 
-                                // Показываем расширенное уведомление
                                 GM_notification({
                                     title: 'Доступно обновление',
-                                    text: `${scriptName} v${remoteVersion}\n\n"${message}"\nАвтор: ${author}\nДата: ${date}\n→ Нажми, чтобы открыть скрипт`,
+                                    text: `${scriptName} v${remoteVersion}\n\n"${message}"\nАвтор: ${author}\nДата: ${date}\n→ Нажми, чтобы обновить`,
                                     timeout: 15,
                                     onclick: () => window.open(rawUrl)
                                 });
 
                             } else {
-                                // Если нет коммитов — просто стандартное уведомление
                                 GM_notification({
                                     title: 'Обновление доступно',
                                     text: `${scriptName} v${remoteVersion}\nНажми, чтобы открыть скрипт и обновить.`,
@@ -886,14 +888,6 @@
                         })
                         .catch(err => {
                             console.error('Ошибка при получении информации о коммите:', err);
-
-                            // Резервное уведомление без деталей коммита
-                            GM_notification({
-                                title: 'Обновление доступно',
-                                text: `${scriptName} v${remoteVersion}\nНажми, чтобы открыть скрипт и обновить.`,
-                                timeout: 10,
-                                onclick: () => window.open(rawUrl)
-                            });
                         });
 
                 } else {
@@ -907,11 +901,14 @@
     });
 
     // Сохраняем текущую версию из скрипта
-    const currentVersion = GM_getValue('localVersion', '0.0.0');
     const thisScriptVersion = getVersionFromString(document.currentScript.textContent);
+    const currentVersion = GM_getValue('localVersion', '0.0.0');
+
     if (thisScriptVersion && thisScriptVersion !== currentVersion) {
-        GM_setValue('localVersion', thisScriptVersion);
-        console.log(`Сохранена локальная версия: ${thisScriptVersion}`);
+        GM_setValue('localVersion', thisScriptVersion.trim());
+        console.log(`✅ Сохранена новая локальная версия: ${thisScriptVersion}`);
+    } else {
+        console.log(`ℹ️ Локальная версия не изменилась: ${currentVersion}`);
     }
 
     // Проверять каждые 6 часов
