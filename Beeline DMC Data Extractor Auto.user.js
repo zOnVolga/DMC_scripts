@@ -15,7 +15,7 @@
 // @updateURL    https://raw.githubusercontent.com/zOnVolga/DMC_scripts/main/Beeline%20DMC%20Data%20Extractor.js
 // @icon         https://raw.githubusercontent.com/zOnVolga/DMC_scripts/main/icon-beeline-yellow.svg
 // ==/UserScript==
-
+ 
 (function () {
     'use strict';
       // Импортируем axios из CDN
