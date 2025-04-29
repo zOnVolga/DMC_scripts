@@ -17,17 +17,20 @@ jobs:
         with:
           node-version: '18'
 
-      - name: Установить зависимости
-        run: npm init -y && npm install fs
-
       - name: Выполнить сборку
         run: |
           # Путь к исходному скрипту и целевому
           INPUT_SCRIPT="Beeline DMC Data Extractor.js"
           OUTPUT_SCRIPT="Beeline-DMC-Data-Extractor.auto.user.js"
 
+          # Проверяем наличие файла
+          if [ ! -f "$INPUT_SCRIPT" ]; then
+            echo "❌ Файл $INPUT_SCRIPT не найден!"
+            exit 1
+          fi
+
           # Получаем текущую версию из @version
-          VERSION=$(grep -oP '@version\s+\K.*' "$INPUT_SCRIPT")
+          VERSION=$(grep -oP '@version\\s+\\K[^ ]+' "$INPUT_SCRIPT")
 
           echo "Текущая версия: $VERSION"
 
@@ -140,10 +143,10 @@ jobs:
           EOF
 
       - name: Зафиксировать изменения
-        run: git config --local user.email "action@github.com" && git config --local user.name "GitHub Action"
-
-      - name: Зафиксировать файл
-        run: git add "$OUTPUT_SCRIPT" && git commit -m "Обновлено: $OUTPUT_SCRIPT" || echo "Изменений нет"
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add "$OUTPUT_SCRIPT" && git commit -m "Обновлено: $OUTPUT_SCRIPT" || echo "Нет изменений для фиксации"
 
       - name: Залить изменения
         uses: ad-m/github-push-action@master
