@@ -12,6 +12,9 @@ jobs:
       - name: Клонировать репо
         uses: actions/checkout@v3
 
+      - name: Показать список файлов
+        run: ls -la
+
       - name: Установить Node.js
         uses: actions/setup-node@v3
         with:
