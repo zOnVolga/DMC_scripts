@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Beeline DMC Data Extractor + AutoUpdater (с коммитами)
 // @namespace    http://tampermonkey.net/
-// @version      7.1.0
+// @version      7.1.1
 // @description  Извлечение данных из Beeline DMC с возможностью автообновления и уведомлением о последнем коммите
 // @author       zOnVolga
 // @match        https://dmc.beeline.ru/*
@@ -11,6 +11,7 @@
 // @grant        GM_setValue
 // @connect      raw.githubusercontent.com
 // @connect      api.github.com
+// @icon         https://raw.githubusercontent.com/zOnVolga/DMC_scripts/main/icon-beeline.svg
 // ==/UserScript==
 
 (function () {
