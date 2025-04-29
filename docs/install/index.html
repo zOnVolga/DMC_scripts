@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Beeline DMC Data Extractor</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      background-color: #fffcf7;
+      text-align: center;
+      padding: 40px;
+    }
+
+    .logo {
+      width: 64px;
+      height: 64px;
+      margin-bottom: 20px;
+    }
+
+    h1 {
+      font-size: 24px;
+      color: #e60012;
+    }
+
+    .btn {
+      display: inline-block;
+      padding: 12px 24px;
+      background-color: #4A90E2;
+      color: white;
+      text-decoration: none;
+      border-radius: 5px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    .version {
+      font-size: 14px;
+      color: gray;
+      margin-top: 10px;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+
+<a href="https://raw.githubusercontent.com/zOnVolga/DMC_scripts/main/Beeline-DMC-Data-Extractor.auto.user.js" target="_blank">
+  <img src="https://raw.githubusercontent.com/zOnVolga/DMC_scripts/main/icon-beeline-yellow.svg" class="logo" />
+  <h1>Beeline DMC Data Extractor + AutoUpdater</h1>
+  <span class="version">Версия: 
+    <script>
+      fetch('https://raw.githubusercontent.com/zOnVolga/DMC_scripts/main/Beeline-DMC-Data-Extractor.auto.user.js')
+        .then(res => res.text())
+        .then(txt => {
+          const ver = txt.match(/\/\/\s*@version\s+([^\n]+)/)?.[1] || 'не найдена';
+          document.write(ver);
+        });
+    </script>
+  </span>
+  <div class="btn">📥 Установить скрипт</div>
+</a>
+
+</body>
+</html>
