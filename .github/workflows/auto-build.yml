@@ -1,37 +1,36 @@
-name: Автосборка скрипта
+name: Автосборка Beeline DMC Data Extractor
 
 on:
   push:
     branches:
       - main
-  workflow_dispatch:
+  schedule:
+    - cron: '0 */6 * * *' # Раз в 6 часов
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Клонировать репозиторий полностью
+      - name: Клонировать репозиторий
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0  # Загружаем всё дерево проекта
-
-      - name: Показать список файлов
-        run: ls -la
+          fetch-depth: 0
 
       - name: Получить версию из оригинального скрипта
         id: get_version
         run: |
           INPUT_SCRIPT="Beeline_DMC_Data_Extractor.js"
-          
+
           if [ ! -f "$INPUT_SCRIPT" ]; then
-            echo "❌ Ошибка: Входной файл '$INPUT_SCRIPT' не найден!"
+            echo "❌ Ошибка: '$INPUT_SCRIPT' не найден!"
             exit 1
           fi
 
           VERSION=$(grep -oP '@version\\s+\\K[^ ]+' "$INPUT_SCRIPT")
           echo "version=$VERSION" >> "$GITHUB_ENV"
 
-      - name: Создать .user.js с автоапдейтером
+      - name: Собрать .user.js
         run: |
           OUTPUT_SCRIPT="Beeline-DMC-Data-Extractor.auto.user.js"
           SCRIPT_URL="https://raw.githubusercontent.com/zOnVolga/DMC_scripts/main/Beeline_DMC_Data_Extractor.js"
@@ -41,7 +40,7 @@ jobs:
           // @name         Beeline DMC Data Extractor + AutoUpdater
           // @namespace    http://tampermonkey.net/
           // @version      ${{ env.version }}
-          // @description  Извлечение данных из Beeline DMC с возможностью автообновления
+          // @description  Извлечение данных из Beeline DMC с автоапдейтером
           // @author       zOnVolga
           // @match        https://dmc.beeline.ru/*
           // @grant        GM_xmlhttpRequest
@@ -60,21 +59,18 @@ jobs:
 
               console.log("✅ Beeline DMC Data Extractor запущен");
 
-              const scriptToInject = document.createElement('script');
-              scriptToInject.textContent = \`
-                  // === [Основной скрипт] ===
-                  \$\{fetch('\$SCRIPT_URL').then(res => res.text()).catch(() => '')\}
-              \`;
-              document.body.appendChild(scriptToInject);
+              const script = document.createElement('script');
+              script.src = '$SCRIPT_URL';
+              (document.head || document.documentElement).appendChild(script);
 
               // === [Автоапдейтер] ===
               (function checkForUpdates() {
                   const scriptName = 'Beeline DMC Data Extractor';
                   const repoOwner = 'zOnVolga';
                   const repoName = 'DMC_scripts';
-                  const filePath = 'Beeline_DMC_Data_Extractor.js';
-                  const rawUrl = \`https://raw.githubusercontent.com/\${repoOwner}/\${repoName}/main/\${filePath}\`;
-                  const apiUrl = \`https://api.github.com/repos/\${repoOwner}/\${repoName}/commits?path=\${encodeURIComponent(filePath)}&page=1&per_page=1\`;
+                  const filePath = 'Beeline_DMC_Data_Extractor.js'; // URL-encoded filename
+                  const rawUrl = 'https://raw.githubusercontent.com/' + repoOwner + '/' + repoName + '/main/' + filePath;
+                  const apiUrl = 'https://api.github.com/repos/' + repoOwner + '/' + repoName + '/commits?path=' + encodeURIComponent(filePath) + '&page=1&per_page=1'
 
                   function getVersionFromString(content) {
                       const versionMatch = content.match(/\/\/\s*@version\s*([0-9.\-]+)/);
@@ -105,7 +101,7 @@ jobs:
                               }
 
                               if (compareVersions(remoteVersion, localVersion) > 0) {
-                                  console.log(\`🔔 Доступна новая версия: \${remoteVersion} (ваша: \${localVersion})\`);
+                                  console.log(\`🔔 Доступна новая версия: \${remoteVersion}\`);
 
                                   fetch(apiUrl)
                                       .then(res => res.json())
@@ -118,7 +114,7 @@ jobs:
 
                                               GM_notification({
                                                   title: 'Доступно обновление',
-                                                  text: \`\n\${scriptName} v\${remoteVersion}\n\n"\${message}"\nАвтор: \${author}\nДата: \${date}\n→ Нажми, чтобы обновить\`,
+                                                  text: \`\n\${scriptName} v\${remoteVersion}\n\n"${message}"\nАвтор: \${author}\nДата: \${date}\n→ Нажми, чтобы открыть и обновить\`,
                                                   timeout: 15,
                                                   onclick: () => window.open(rawUrl)
                                               });
@@ -128,9 +124,8 @@ jobs:
                                           console.error('Ошибка при получении информации о коммите:', err);
                                       });
 
-                              } else {
-                                  console.log(\`✅ Текущая версия актуальна: \${localVersion}\`);
-                              }
+                          } else {
+                              console.log(\`✅ Текущая версия актуальна: \${localVersion}\`);
                           }
                       },
                       onerror: function(err) {
@@ -139,7 +134,7 @@ jobs:
                   });
 
                   const thisScriptVersion = getVersionFromString(document.currentScript.textContent);
-                  if (thisScriptVersion && thisScriptVersion !== GM_getValue('localVersion', '0.0.0')) {
+                  if (thisScriptVersion && compareVersions(thisScriptVersion, localVersion) > 0) {
                       GM_setValue('localVersion', thisScriptVersion.trim());
                       console.log(\`💾 Локальная версия обновлена до: \${thisScriptVersion}\`);
                   }
@@ -149,11 +144,13 @@ jobs:
           })();
           EOF
 
-      - name: Зафиксировать изменения и отправить
+      - name: Настроить Git с собственным именем
         run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add "$OUTPUT_SCRIPT"
+          git config --local user.email "zon.volga@gmail.com"
+          git config --local user.name "zOnVolga"
 
-          git diff --cached --quiet || git diff --exit-code || git commit -m "🔄 Обновлен автогенерируемый скрипт"
-          git push
+      - name: Зафиксировать и отправить изменения
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: main
