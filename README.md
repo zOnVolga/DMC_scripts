@@ -1,6 +1,7 @@
 # DMC Scripts
 
 ![Beeline DMC Script Icon](https://raw.githubusercontent.com/zOnVolga/DMC_scripts/main/icon-beeline.svg)
+
 Сборник полезных скриптов для работы с DMC (Data Management Console) от Beeline и других сервисов.
 
 Все скрипты оптимизированы под использование в расширениях:
