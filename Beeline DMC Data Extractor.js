@@ -1,15 +1,17 @@
 // ==UserScript==
-// @name         Beeline DMC Data Extractor
+// @name         Beeline DMC Data Extractor + AutoUpdater
 // @namespace    http://tampermonkey.net/
-// @version      7.0.8
-// @description  Извлечение данных о проектах и задачах после авторизации
-// @author       zOn
-// @match        https://dmc.beeline.ru/projects
-// @match        https://dmc.beeline.ru/processes
-// @grant        none
-// @icon         https://www.google.com/s2/favicons?domain=beeline.ru
-// @updateURL    https://github.com/zOnVolga/DMC_scripts/raw/refs/heads/main/Beeline%20DMC%20Data%20Extractor.js
-// @downloadURL  https://github.com/zOnVolga/DMC_scripts/raw/refs/heads/main/Beeline%20DMC%20Data%20Extractor.js
+// @version      7.0.9
+// @description  Извлечение данных из Beeline DMC с возможностью автообновления
+// @author       zOnVolga
+// @match        https://dmc.beeline.ru/*
+// @grant        GM_xmlhttpRequest
+// @grant        GM_notification
+// @grant        GM_getValue
+// @grant        GM_setValue
+// @connect      raw.githubusercontent.com
+// @downloadURL  https://raw.githubusercontent.com/zOnVolga/DMC_scripts/main/Beeline%20DMC%20Data%20Extractor.js
+// @updateURL    https://raw.githubusercontent.com/zOnVolga/DMC_scripts/main/Beeline%20DMC%20Data%20Extractor.js
 // ==/UserScript==
 
 (function () {
@@ -809,4 +811,67 @@
 
         return table.outerHTML;
     }
+})();
+
+// === [Автоапдейтер] ===
+(function checkForUpdates() {
+    const scriptName = 'Beeline DMC Data Extractor';
+    const rawUrl = 'https://raw.githubusercontent.com/zOnVolga/DMC_scripts/main/Beeline%20DMC%20Data%20Extractor.js';
+
+    function getVersionFromString(content) {
+        const versionMatch = content.match(/\/\/\s*@version\s*([0-9.\-]+)/);
+        return versionMatch ? versionMatch[1] : null;
+    }
+
+    function compareVersions(v1, v2) {
+        const parts1 = v1.split('.').map(Number);
+        const parts2 = v2.split('.').map(Number);
+        for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
+            if ((parts1[i] || 0) > (parts2[i] || 0)) return 1;
+            if ((parts1[i] || 0) < (parts2[i] || 0)) return -1;
+        }
+        return 0;
+    }
+
+    GM_xmlhttpRequest({
+        method: 'GET',
+        url: rawUrl,
+        onload: function(response) {
+            if (response.status === 200) {
+                const remoteVersion = getVersionFromString(response.responseText);
+                const localVersion = GM_getValue('localVersion', '0.0.0');
+
+                if (!remoteVersion) {
+                    console.error('Не найдена версия в удаленном скрипте');
+                    return;
+                }
+
+                if (compareVersions(remoteVersion, localVersion) > 0) {
+                    console.log(`Доступна новая версия: ${remoteVersion} (твоя: ${localVersion})`);
+                    GM_notification({
+                        title: 'Обновление доступно',
+                        text: `${scriptName} v${remoteVersion}\nНажми, чтобы открыть скрипт и обновить.`,
+                        timeout: 15,
+                        onclick: () => window.open(rawUrl)
+                    });
+                } else {
+                    console.log(`Текущая версия актуальна: ${localVersion}`);
+                }
+            }
+        },
+        onerror: function(err) {
+            console.error('Ошибка при проверке обновления:', err);
+        }
+    });
+
+    // Сохраняем текущую версию из скрипта
+    const currentVersion = GM_getValue('localVersion', '0.0.0');
+    const thisScriptVersion = getVersionFromString(document.currentScript.textContent);
+    if (thisScriptVersion && thisScriptVersion !== currentVersion) {
+        GM_setValue('localVersion', thisScriptVersion);
+        console.log(`Сохранена локальная версия: ${thisScriptVersion}`);
+    }
+
+    // Запускать проверку раз в 6 часов
+    setTimeout(checkForUpdates, 6 * 60 * 60 * 1000);
 })();
