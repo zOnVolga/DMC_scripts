@@ -11,6 +11,8 @@ jobs:
     steps:
       - name: Клонировать репо
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
       - name: Показать список файлов
         run: ls -la
