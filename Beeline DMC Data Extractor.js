@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Beeline DMC Data Extractor + AutoUpdater
+// @name         Beeline DMC Data Extractor + AutoUpdater (с коммитами)
 // @namespace    http://tampermonkey.net/
-// @version      7.0.9
-// @description  Извлечение данных из Beeline DMC с возможностью автообновления
+// @version      7.1.0
+// @description  Извлечение данных из Beeline DMC с возможностью автообновления и уведомлением о последнем коммите
 // @author       zOnVolga
 // @match        https://dmc.beeline.ru/*
 // @grant        GM_xmlhttpRequest
@@ -10,8 +10,7 @@
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @connect      raw.githubusercontent.com
-// @downloadURL  https://raw.githubusercontent.com/zOnVolga/DMC_scripts/main/Beeline%20DMC%20Data%20Extractor.js
-// @updateURL    https://raw.githubusercontent.com/zOnVolga/DMC_scripts/main/Beeline%20DMC%20Data%20Extractor.js
+// @connect      api.github.com
 // ==/UserScript==
 
 (function () {
@@ -813,10 +812,14 @@
     }
 })();
 
-// === [Автоапдейтер] ===
+// === [Автоапдейтер с информацией о коммите] ===
 (function checkForUpdates() {
     const scriptName = 'Beeline DMC Data Extractor';
-    const rawUrl = 'https://raw.githubusercontent.com/zOnVolga/DMC_scripts/main/Beeline%20DMC%20Data%20Extractor.js';
+    const repoOwner = 'zOnVolga';
+    const repoName = 'DMC_scripts';
+    const filePath = 'Beeline%20DMC%20Data%20Extractor.js'; // URL-encoded filename
+    const rawUrl = `https://raw.githubusercontent.com/${repoOwner}/${repoName}/main/${filePath}`;
+    const apiUrl = `https://api.github.com/repos/${repoOwner}/${repoName}/commits?path=${encodeURIComponent(filePath)}&page=1&per_page=1`;
 
     function getVersionFromString(content) {
         const versionMatch = content.match(/\/\/\s*@version\s*([0-9.\-]+)/);
@@ -848,12 +851,48 @@
 
                 if (compareVersions(remoteVersion, localVersion) > 0) {
                     console.log(`Доступна новая версия: ${remoteVersion} (твоя: ${localVersion})`);
-                    GM_notification({
-                        title: 'Обновление доступно',
-                        text: `${scriptName} v${remoteVersion}\nНажми, чтобы открыть скрипт и обновить.`,
-                        timeout: 15,
-                        onclick: () => window.open(rawUrl)
-                    });
+
+                    // Загружаем информацию о последнем коммите
+                    fetch(apiUrl)
+                        .then(res => res.json())
+                        .then(commits => {
+                            if (commits.length > 0) {
+                                const commit = commits[0];
+                                const shaShort = commit.sha.substring(0, 7);
+                                const message = commit.commit.message;
+                                const author = commit.author?.login || commit.commit.author.name;
+                                const date = new Date(commit.commit.author.date).toLocaleString();
+
+                                // Показываем расширенное уведомление
+                                GM_notification({
+                                    title: 'Доступно обновление',
+                                    text: `${scriptName} v${remoteVersion}\n\n"${message}"\nАвтор: ${author}\nДата: ${date}\n→ Нажми, чтобы открыть скрипт`,
+                                    timeout: 15,
+                                    onclick: () => window.open(rawUrl)
+                                });
+
+                            } else {
+                                // Если нет коммитов — просто стандартное уведомление
+                                GM_notification({
+                                    title: 'Обновление доступно',
+                                    text: `${scriptName} v${remoteVersion}\nНажми, чтобы открыть скрипт и обновить.`,
+                                    timeout: 10,
+                                    onclick: () => window.open(rawUrl)
+                                });
+                            }
+                        })
+                        .catch(err => {
+                            console.error('Ошибка при получении информации о коммите:', err);
+
+                            // Резервное уведомление без деталей коммита
+                            GM_notification({
+                                title: 'Обновление доступно',
+                                text: `${scriptName} v${remoteVersion}\nНажми, чтобы открыть скрипт и обновить.`,
+                                timeout: 10,
+                                onclick: () => window.open(rawUrl)
+                            });
+                        });
+
                 } else {
                     console.log(`Текущая версия актуальна: ${localVersion}`);
                 }
@@ -872,6 +911,6 @@
         console.log(`Сохранена локальная версия: ${thisScriptVersion}`);
     }
 
-    // Запускать проверку раз в 6 часов
+    // Проверять каждые 6 часов
     setTimeout(checkForUpdates, 6 * 60 * 60 * 1000);
 })();
