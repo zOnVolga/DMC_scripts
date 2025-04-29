@@ -14,40 +14,39 @@ jobs:
       - name: Клонировать репозиторий
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0  # Чтобы получить всю историю для git tag / commit info
+          fetch-depth: 0  # Чтобы получить всю историю
 
       - name: Показать список файлов
         run: ls -la
 
-      - name: Получить данные о версии и собрать скрипт
+      - name: Получить версию и собрать скрипт
         run: |
-          # Настройки
           INPUT_SCRIPT="Beeline DMC Data Extractor.js"
           OUTPUT_SCRIPT="Beeline-DMC-Data-Extractor.auto.user.js"
 
-          # Проверяем, существует ли нужный файл
+          # Проверяем наличие файла
           if [ ! -f "$INPUT_SCRIPT" ]; then
-            echo "❌ Ошибка: Входной файл '$INPUT_SCRIPT' не найден!"
+            echo "❌ Ошибка: '$INPUT_SCRIPT' не найден!"
             exit 1
           fi
 
-          # Получаем версию из @version
+          # Читаем версию из оригинального файла
           VERSION=$(grep -oP '@version\\s+\\K[^ ]+' "$INPUT_SCRIPT")
 
           if [ -z "$VERSION" ]; then
-            echo "❌ Не удалось найти версию в скрипте."
+            echo "❌ Не удалось прочитать версию"
             exit 1
           fi
 
-          echo "📥 Текущая версия: $VERSION"
+          echo "📥 Найдена версия: $VERSION"
 
-          # Генерируем .user.js с автоапдейтером
+          # Генерируем .user.js
           cat > "$OUTPUT_SCRIPT" << EOF
           // ==UserScript==
           // @name         Beeline DMC Data Extractor + AutoUpdater
           // @namespace    http://tampermonkey.net/
           // @version      $VERSION
-          // @description  Извлечение данных из Beeline DMC с возможностью автообновления и уведомлением о новом коммите
+          // @description  Извлечение данных из Beeline DMC с автоапдейтером
           // @author       zOnVolga
           // @match        https://dmc.beeline.ru/*
           // @grant        GM_xmlhttpRequest
@@ -56,114 +55,115 @@ jobs:
           // @grant        GM_setValue
           // @connect      raw.githubusercontent.com
           // @connect      api.github.com
-          // @downloadURL  https://raw.githubusercontent.com/zOnVolga/DMC_scripts/main/$OUTPUT_SCRIPT
-          // @updateURL    https://raw.githubusercontent.com/zOnVolga/DMC_scripts/main/$OUTPUT_SCRIPT
+          // @downloadURL  https://raw.githubusercontent.com/zOnVolga/DMC_scripts/main/Beeline-DMC-Data-Extractor.auto.user.js
+          // @updateURL    https://raw.githubusercontent.com/zOnVolga/DMC_scripts/main/Beeline-DMC-Data-Extractor.auto.user.js
           // @icon         https://raw.githubusercontent.com/zOnVolga/DMC_scripts/main/icon-beeline-yellow.svg
           // ==/UserScript==
 
           (function() {
               'use strict';
 
-              console.log("✅ Beeline DMC Data Extractor запущен");
-              // Здесь можно добавить оригинальный функционал, если нужно
-              // или использовать Violentmonkey для подключения основного кода
+              // Загружаем оригинальный скрипт динамически
+              const ORIGINAL_SCRIPT_URL = 'https://raw.githubusercontent.com/zOnVolga/DMC_scripts/main/Beeline%20DMC%20Data%20Extractor.js';
 
-              checkForUpdates();
-          })();
-
-          function getVersionFromString(content) {
-              const versionMatch = content.match(/\/\/\s*@version\s*([0-9.\-]+)/);
-              return versionMatch ? versionMatch[1].trim() : null;
-          }
-
-          function compareVersions(v1, v2) {
-              const parts1 = v1.split('.').map(Number);
-              const parts2 = v2.split('.').map(Number);
-              for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
-                  if ((parts1[i] || 0) > (parts2[i] || 0)) return 1;
-                  if ((parts1[i] || 0) < (parts2[i] || 0)) return -1;
-              }
-              return 0;
-          }
-
-          function checkForUpdates() {
-              const scriptName = 'Beeline DMC Data Extractor';
-              const repoOwner = 'zOnVolga';
-              const repoName = 'DMC_scripts';
-              const filePath = 'Beeline%20DMC%20Data%20Extractor.js'; // URL-encoded path
-              const rawUrl = 'https://raw.githubusercontent.com/' + repoOwner + '/' + repoName + '/main/' + filePath;
-              const apiUrl = 'https://api.github.com/repos/' + repoOwner + '/' + repoName + '/commits?path=' + encodeURIComponent(filePath) + '&page=1&per_page=1';
-
+              // Подключаем внешний скрипт
               GM_xmlhttpRequest({
                   method: 'GET',
-                  url: rawUrl,
+                  url: ORIGINAL_SCRIPT_URL,
                   onload: function(response) {
                       if (response.status === 200) {
-                          const remoteVersion = getVersionFromString(response.responseText);
-                          const localVersion = GM_getValue('localVersion', '0.0.0');
-
-                          if (!remoteVersion) {
-                              console.error('❌ Версия в удаленном скрипте не найдена');
-                              return;
-                          }
-
-                          if (compareVersions(remoteVersion, localVersion) > 0) {
-                              console.log(\`🔔 Доступна новая версия: \${remoteVersion} (твоя: \${localVersion})\`);
-
-                              fetch(apiUrl)
-                                  .then(res => res.json())
-                                  .then(commits => {
-                                      if (commits.length > 0) {
-                                          const commit = commits[0];
-                                          const message = commit.commit.message;
-                                          const author = commit.author?.login || commit.commit.author.name;
-                                          const date = new Date(commit.commit.author.date).toLocaleString();
-
-                                          GM_notification({
-                                              title: 'Доступно обновление',
-                                              text: \`\n\${scriptName} v\${remoteVersion}\n\n"${message}"\nАвтор: \${author}\nДата: \${date}\n→ Нажми, чтобы обновить\`,
-                                              timeout: 15,
-                                              onclick: () => window.open(rawUrl)
-                                          });
-                                      }
-                                  })
-                                  .catch(err => {
-                                      console.error('Ошибка при получении информации о коммите:', err);
-                                  });
-
-                          } else {
-                              console.log(\`✅ Текущая версия актуальна: \${localVersion}\`);
-                          }
+                          const scriptContent = response.responseText;
+                          eval(scriptContent); // Выполняем оригинальный скрипт
+                      } else {
+                          console.error('Не удалось загрузить оригинальный скрипт:', response.status);
                       }
                   },
                   onerror: function(err) {
-                      console.error('❌ Ошибка при проверке обновления:', err);
+                      console.error('Ошибка при загрузке оригинального скрипта:', err);
                   }
               });
 
-              const thisScriptVersion = getVersionFromString(document.currentScript.textContent);
-              const currentVersion = GM_getValue('localVersion', '0.0.0');
+              // === [Автоапдейтер] ===
+              (function checkForUpdates() {
+                  const scriptName = 'Beeline DMC Data Extractor';
+                  const repoOwner = 'zOnVolga';
+                  const repoName = 'DMC_scripts';
+                  const filePath = 'Beeline%20DMC%20Data%20Extractor.js'; // URL-encoded filename
+                  const rawUrl = 'https://raw.githubusercontent.com/' + repoOwner + '/' + repoName + '/main/' + filePath;
+                  const apiUrl = 'https://api.github.com/repos/' + repoOwner + '/' + repoName + '/commits?path=' + encodeURIComponent(filePath) + '&page=1&per_page=1'
 
-              if (thisScriptVersion && compareVersions(thisScriptVersion, currentVersion) > 0) {
-                  GM_setValue('localVersion', thisScriptVersion);
-                  console.log(\`💾 Локальная версия обновлена до: \${thisScriptVersion}\`);
-              } else if (thisScriptVersion && thisScriptVersion !== currentVersion) {
-                  console.warn(\`ℹ️ Версия скрипта (\${thisScriptVersion}) не совпадает с сохранённой (\${currentVersion})\`);
-              }
-              
-              setTimeout(checkForUpdates, 6 * 60 * 60 * 1000);
-          }
-          EOF
+                  function getVersionFromString(content) {
+                      const versionMatch = content.match(/\/\/\s*@version\s*([0-9.\-]+)/);
+                      return versionMatch ? versionMatch[1].trim() : null;
+                  }
 
-          echo "✅ Скрипт успешно собран: $OUTPUT_SCRIPT"
+                  function compareVersions(v1, v2) {
+                      const parts1 = v1.split('.').map(Number);
+                      const parts2 = v2.split('.').map(Number);
+                      for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
+                          if ((parts1[i] || 0) > (parts2[i] || 0)) return 1;
+                          if ((parts1[i] || 0) < (parts2[i] || 0)) return -1;
+                      }
+                      return 0;
+                  }
 
-      - name: Зафиксировать и отправить изменения
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
+                  // Проверка обновлений
+                  GM_xmlhttpRequest({
+                      method: 'GET',
+                      url: rawUrl,
+                      onload: function(response) {
+                          if (response.status === 200) {
+                              const remoteVersion = getVersionFromString(response.responseText);
+                              const localVersion = GM_getValue('localVersion', '0.0.0');
 
-          # Проверяем, были ли изменения
-          git add "$OUTPUT_SCRIPT"
+                              if (!remoteVersion) {
+                                  console.error('❌ Не найдена версия в удаленном скрипте');
+                                  return;
+                              }
 
-          git diff --cached --quiet || git diff --exit-code || git commit -m "Обновлено: $OUTPUT_SCRIPT"
-          git push origin main
+                              console.log('[Автоапдейтер] Локальная версия:', localVersion);
+                              console.log('[Автоапдейтер] Удаленная версия: ', remoteVersion);
+
+                              if (compareVersions(remoteVersion, localVersion) > 0) {
+                                  console.log(\`🔔 Доступна новая версия: \${remoteVersion}\`);
+
+                                  fetch(apiUrl)
+                                      .then(res => res.json())
+                                      .then(commits => {
+                                          if (commits.length > 0) {
+                                              const commit = commits[0];
+                                              const message = commit.commit.message;
+                                              const author = commit.author?.login || commit.commit.author.name;
+                                              const date = new Date(commit.commit.author.date).toLocaleString();
+
+                                              GM_notification({
+                                                  title: 'Доступно обновление',
+                                                  text: \`\n\${scriptName} v\${remoteVersion}\n\n"${message}"\nАвтор: \${author}\nДата: \${date}\n→ Нажми, чтобы открыть и обновить\`,
+                                                  timeout: 15,
+                                                  onclick: () => window.open(rawUrl)
+                                              });
+                                          }
+                                      })
+                                      .catch(err => {
+                                          console.error('Ошибка при получении информации о коммите:', err);
+                                      });
+                              } else {
+                                  console.log(\`✅ Текущая версия актуальна: \${localVersion}\`);
+                              }
+                          }
+                      },
+                      onerror: function(err) {
+                          console.error('❌ Ошибка при проверке обновления:', err);
+                      }
+                  });
+
+                  // Сохраняем текущую версию из скрипта
+                  const thisScriptVersion = getVersionFromString(document.currentScript.textContent);
+                  if (thisScriptVersion && thisScriptVersion !== localVersion) {
+                      GM_setValue('localVersion', thisScriptVersion);
+                      console.log(\`💾 Локальная версия обновлена до: \${thisScriptVersion}\`);
+                  }
+
+                  setTimeout(checkForUpdates, 6 * 60 * 60 * 1000);
+              })();
+          })();
