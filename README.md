@@ -1,5 +1,6 @@
 # DMC Scripts
 
+![Beeline DMC Script Icon](https://raw.githubusercontent.com/zOnVolga/DMC_scripts/main/icon-beeline.svg)
 Сборник полезных скриптов для работы с DMC (Data Management Console) от Beeline и других сервисов.
 
 Все скрипты оптимизированы под использование в расширениях:
@@ -19,7 +20,7 @@
 - Поддержка автообновления (раз в 6 часов)
 - Уведомление о новых версиях
 
-#### 📦 Версия: `7.0.9`
+#### 📦 Версия: `7.1.1`
 
 #### 🖱️ Установка:
 [![Install Script](https://img.shields.io/badge/-Установить-success)](https://raw.githubusercontent.com/zOnVolga/DMC_scripts/main/Beeline%20DMC%20Data%20Extractor.js)
