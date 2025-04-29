@@ -20,7 +20,6 @@ jobs:
       - name: Получить версию из оригинального скрипта
         id: get_version
         run: |
-          INPUT_SCRIPT_URL="https://raw.githubusercontent.com/zOnVolga/DMC_scripts/main/Beeline_DMC_Data_Extractor.js"
           INPUT_SCRIPT="Beeline_DMC_Data_Extractor.js"
 
           if [ ! -f "$INPUT_SCRIPT" ]; then
