@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         Beeline DMC Data Extractor + AutoUpdater (с коммитами)
+// @name         Beeline DMC Data Extractor + AutoUpdater (v7.1.3)
 // @namespace    http://tampermonkey.net/
 // @version      7.1.3
 // @description  Извлечение данных из Beeline DMC с возможностью автообновления и уведомлением о последнем коммите
@@ -10,10 +10,10 @@
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @connect      raw.githubusercontent.com
+// @connect      api.github.com
 // @downloadURL  https://raw.githubusercontent.com/zOnVolga/DMC_scripts/main/Beeline%20DMC%20Data%20Extractor.js
 // @updateURL    https://raw.githubusercontent.com/zOnVolga/DMC_scripts/main/Beeline%20DMC%20Data%20Extractor.js
-// @connect      api.github.com
-// @icon         https://raw.githubusercontent.com/zOnVolga/DMC_scripts/main/icon-beeline.svg
+// @icon         https://raw.githubusercontent.com/zOnVolga/DMC_scripts/main/icon-beeline-yellow.svg
 // ==/UserScript==
 
 (function () {
@@ -815,7 +815,7 @@
     }
 })();
 
-// === [Автоапдейтер с информацией о коммите] ===
+// === [Автоапдейтер] ===
 (function checkForUpdates() {
     const scriptName = 'Beeline DMC Data Extractor';
     const repoOwner = 'zOnVolga';
@@ -844,8 +844,7 @@
         url: rawUrl,
         onload: function(response) {
             if (response.status === 200) {
-                const remoteContent = response.responseText;
-                const remoteVersion = getVersionFromString(remoteContent);
+                const remoteVersion = getVersionFromString(response.responseText);
                 const localVersion = GM_getValue('localVersion', '0.0.0');
 
                 console.log('[Автоапдейтер] Версии:');
@@ -904,11 +903,13 @@
     const thisScriptVersion = getVersionFromString(document.currentScript.textContent);
     const currentVersion = GM_getValue('localVersion', '0.0.0');
 
-    if (thisScriptVersion && thisScriptVersion !== currentVersion) {
+    if (thisScriptVersion && compareVersions(thisScriptVersion, currentVersion) > 0) {
         GM_setValue('localVersion', thisScriptVersion.trim());
-        console.log(`✅ Сохранена новая локальная версия: ${thisScriptVersion}`);
+        console.log(`✅ Обнаружена новая локальная версия: ${thisScriptVersion}`);
+    } else if (thisScriptVersion && thisScriptVersion !== currentVersion) {
+        console.warn(`ℹ️ Версия скрипта (${thisScriptVersion}) не совпадает с сохранённой (${currentVersion}), но не выше`);
     } else {
-        console.log(`ℹ️ Локальная версия не изменилась: ${currentVersion}`);
+        console.log(`✅ Локальная версия актуальна: ${currentVersion}`);
     }
 
     // Проверять каждые 6 часов
