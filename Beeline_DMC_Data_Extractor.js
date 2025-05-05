@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Beeline DMC Data Extractor + AutoUpdater
 // @namespace    http://tampermonkey.net/
-// @version      7.2.2
+// @version      7.2.3
 // @description  Извлечение данных из Beeline DMC с возможностью автообновления и уведомлением о последнем коммите
 // @author       zOnVolga
 // @match        https://dmc.beeline.ru/*
@@ -29,7 +29,7 @@
 
         axiosLoadedPromise = new Promise((resolve, reject) => {
             const script = document.createElement('script');
-            script.src = 'https://unpkg.com/axios@1.6.7/dist/axios.min.js';
+            script.src = 'https://unpkg.com/axios@1.8.4/dist/axios.min.js';
             script.onload = () => {
                 if (window.axios || unsafeWindow.axios) {
                     axios = window.axios || unsafeWindow.axios;
