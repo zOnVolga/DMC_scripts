@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Beeline DMC Data Extractor + AutoUpdater
 // @namespace    http://tampermonkey.net/
-// @version      7.2.0
+// @version      7.2.2
 // @description  Извлечение данных из Beeline DMC с возможностью автообновления и уведомлением о последнем коммите
 // @author       zOnVolga
 // @match        https://dmc.beeline.ru/*
@@ -210,184 +210,150 @@
     }
 
     // Безопасный showModal
-    async function showModal() {
-        if (!axios) {
-            await loadAxios();
-        }
+function showModal() {
+    const modal = document.createElement('div');
+    modal.style.position = 'fixed';
+    modal.style.top = '50%';
+    modal.style.left = '50%';
+    modal.style.transform = 'translate(-50%, -50%)';
+    modal.style.backgroundColor = '#fff';
+    modal.style.padding = '20px';
+    modal.style.borderRadius = '10px';
+    modal.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
+    modal.style.zIndex = '10000';
+    modal.style.width = '300px';
+    modal.style.textAlign = 'center';
 
-        // --- Модальное окно ---
-        const modal = document.createElement('div');
-        modal.style.position = 'fixed';
-        modal.style.top = '50%';
-        modal.style.left = '50%';
-        modal.style.transform = 'translate(-50%, -50%)';
-        modal.style.backgroundColor = '#fff';
-        modal.style.padding = '20px';
-        modal.style.borderRadius = '10px';
-        modal.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
-        modal.style.zIndex = '10000';
-        modal.style.width = '300px';
-        modal.style.textAlign = 'center';
+    const title = document.createElement('h3');
+    title.textContent = 'Выберите фильтры';
+    modal.appendChild(title);
 
-        const title = document.createElement('h3');
-        title.textContent = 'Выберите фильтры';
-        modal.appendChild(title);
+    const container = document.createElement('div');
+    container.style.display = 'flex';
+    container.style.flexDirection = 'column';
+    container.style.gap = '10px';
+    modal.appendChild(container);
 
-        const container = document.createElement('div');
-        container.style.display = 'flex';
-        container.style.flexDirection = 'column';
-        container.style.gap = '10px';
-        modal.appendChild(container);
+    // Функция для создания современного переключателя
+    const createSwitch = (id, value, label, isChecked = false) => {
+        const switchContainer = document.createElement('label');
+        switchContainer.style.display = 'flex';
+        switchContainer.style.alignItems = 'center';
+        switchContainer.style.gap = '10px';
 
-        let selectedFilters = [];
-        let uncompletedTasksSwitch = null;
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.id = id;
+        checkbox.value = value;
+        checkbox.checked = isChecked;
+        checkbox.style.display = 'none';
 
-        // Функция создания переключателя
-        function createSwitch(id, value, label, isChecked = false) {
-            const switchContainer = document.createElement('label');
-            switchContainer.style.display = 'flex';
-            switchContainer.style.alignItems = 'center';
-            switchContainer.style.gap = '10px';
+        const slider = document.createElement('span');
+        slider.style.position = 'relative';
+        slider.style.width = '40px';
+        slider.style.height = '20px';
+        slider.style.backgroundColor = isChecked ? '#4CAF50' : '#ccc';
+        slider.style.borderRadius = '20px';
+        slider.style.cursor = 'pointer';
+        slider.style.transition = 'background-color 0.3s';
 
-            const checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.id = id;
-            checkbox.value = value;
-            checkbox.checked = isChecked;
-            checkbox.style.display = 'none';
+        const circle = document.createElement('span');
+        circle.style.position = 'absolute';
+        circle.style.width = '16px';
+        circle.style.height = '16px';
+        circle.style.backgroundColor = '#fff';
+        circle.style.borderRadius = '50%';
+        circle.style.top = '2px';
+        circle.style.left = isChecked ? '22px' : '2px';
+        circle.style.transition = 'left 0.3s';
 
-            const slider = document.createElement('span');
-            slider.style.position = 'relative';
-            slider.style.width = '40px';
-            slider.style.height = '20px';
-            slider.style.backgroundColor = isChecked ? '#4CAF50' : '#ccc';
-            slider.style.borderRadius = '20px';
-            slider.style.cursor = 'pointer';
-            slider.style.transition = 'background-color 0.3s';
-
-            const circle = document.createElement('span');
-            circle.style.position = 'absolute';
-            circle.style.width = '16px';
-            circle.style.height = '16px';
-            circle.style.backgroundColor = '#fff';
-            circle.style.borderRadius = '50%';
-            circle.style.top = '2px';
-            circle.style.left = isChecked ? '22px' : '2px';
-            circle.style.transition = 'left 0.3s';
-
-            slider.appendChild(circle);
-            checkbox.addEventListener('change', () => {
-                slider.style.backgroundColor = checkbox.checked ? '#4CAF50' : '#ccc';
-                circle.style.left = checkbox.checked ? '22px' : '2px';
-            });
-
-            const labelElement = document.createElement('span');
-            labelElement.textContent = label;
-            labelElement.style.fontSize = '14px';
-            labelElement.style.color = '#333';
-
-            switchContainer.appendChild(checkbox);
-            switchContainer.appendChild(slider);
-            switchContainer.appendChild(labelElement);
-
-            return { switchContainer, checkbox };
-        }
-
-        // Выпадающий список филиалов
-        const branchSelectContainer = document.createElement('div');
-        branchSelectContainer.style.display = 'none';
-        const branchSelectLabel = document.createElement('span');
-        branchSelectLabel.textContent = 'Выберите филиалы:';
-        branchSelectLabel.style.fontSize = '14px';
-        branchSelectLabel.style.color = '#333';
-        branchSelectLabel.style.marginBottom = '5px';
-        branchSelectContainer.appendChild(branchSelectLabel);
-
-        const branchSelect = document.createElement('select');
-        branchSelect.multiple = true;
-        branchSelect.size = 8;
-        branchSelect.style.width = '100%';
-        branchSelect.style.padding = '5px';
-        branchSelect.style.border = '1px solid #ccc';
-        branchSelect.style.borderRadius = '5px';
-        branchSelectContainer.appendChild(branchSelect);
-        container.appendChild(branchSelectContainer);
-
-        // Переключатель "Выбрать филиал"
-        const selectBranchSwitch = createSwitch('selectBranch', 'true', 'Выбрать филиал');
-        container.appendChild(selectBranchSwitch.switchContainer);
-
-        // Переключатели регионов
-        const southSwitch = createSwitch('south', filter_south, 'ПФ (Юг)');
-        const volgaSwitch = createSwitch('volga', filter_volga, 'ПФ (Волга)');
-        const szSwitch = createSwitch('sz', filter_sz, 'ПФ (СЗ)');
-        const skSwitch = createSwitch('sk', filter_sk, 'ПФ (СК)');
-        const dvfSwitch = createSwitch('dvf', filter_dvf, 'ДВФ');
-        const sfSwitch = createSwitch('sf', filter_sf, 'СФ');
-        const ufSwitch = createSwitch('uf', filter_uf, 'УФ');
-        const cfSwitch = createSwitch('cf', filter_cf, 'ЦФ');
-
-        container.appendChild(southSwitch.switchContainer);
-        container.appendChild(volgaSwitch.switchContainer);
-        container.appendChild(szSwitch.switchContainer);
-        container.appendChild(skSwitch.switchContainer);
-        container.appendChild(dvfSwitch.switchContainer);
-        container.appendChild(sfSwitch.switchContainer);
-        container.appendChild(ufSwitch.switchContainer);
-        container.appendChild(cfSwitch.switchContainer);
-
-        // Переменные для выпадающего списка филиалов
-        let branchSelect;
-        let branchSelectLabel;
-
-        // Логика отображения/скрытия филиалов
-        selectBranchSwitch.checkbox.addEventListener('change', () => {
-            if (selectBranchSwitch.checkbox.checked) {
-                southSwitch.switchContainer.style.display = 'none';
-                volgaSwitch.switchContainer.style.display = 'none';
-                szSwitch.switchContainer.style.display = 'none';
-                skSwitch.switchContainer.style.display = 'none';
-                dvfSwitch.switchContainer.style.display = 'none';
-                sfSwitch.switchContainer.style.display = 'none';
-                ufSwitch.switchContainer.style.display = 'none';
-                cfSwitch.switchContainer.style.display = 'none';
-
-                // Создаем элементы выпадающего списка (если ещё не созданы)
-                if (!branchSelect) {
-                    branchSelect = document.createElement('select');
-                    branchSelect.multiple = true;
-                    branchSelect.size = 8;
-                    branchSelect.style.width = '100%';
-                    branchSelect.style.padding = '5px';
-                    branchSelect.style.border = '1px solid #ccc';
-                    branchSelect.style.borderRadius = '5px';
-
-                    branchSelectLabel = document.createElement('span');
-                    branchSelectLabel.textContent = 'Выберите филиалы:';
-                    branchSelectLabel.style.fontSize = '14px';
-                    branchSelectLabel.style.color = '#333';
-                    branchSelectLabel.style.marginBottom = '5px';
-
-                    branchSelectContainer.innerHTML = '';
-                    branchSelectContainer.appendChild(branchSelectLabel);
-                    branchSelectContainer.appendChild(branchSelect);
-                }
-
-                branchSelectContainer.style.display = 'block';
-                loadBranches();
-            } else {
-                southSwitch.switchContainer.style.display = 'flex';
-                volgaSwitch.switchContainer.style.display = 'flex';
-                szSwitch.switchContainer.style.display = 'flex';
-                skSwitch.switchContainer.style.display = 'flex';
-                dvfSwitch.switchContainer.style.display = 'flex';
-                sfSwitch.switchContainer.style.display = 'flex';
-                ufSwitch.switchContainer.style.display = 'flex';
-                cfSwitch.switchContainer.style.display = 'flex';
-                branchSelectContainer.style.display = 'none';
-            }
+        slider.appendChild(circle);
+        checkbox.addEventListener('change', () => {
+            slider.style.backgroundColor = checkbox.checked ? '#4CAF50' : '#ccc';
+            circle.style.left = checkbox.checked ? '22px' : '2px';
         });
 
+        const labelElement = document.createElement('span');
+        labelElement.textContent = label;
+        labelElement.style.fontSize = '14px';
+        labelElement.style.color = '#333';
+
+        switchContainer.appendChild(checkbox);
+        switchContainer.appendChild(slider);
+        switchContainer.appendChild(labelElement);
+
+        return switchContainer;
+    };
+
+    // Переключатель "Выбрать филиал"
+    const selectBranchSwitch = createSwitch('selectBranch', 'true', 'Выбрать филиал');
+    container.appendChild(selectBranchSwitch);
+
+    // Переключатели регионов
+    const southSwitch = createSwitch('south', filter_south, 'ПФ (Юг)');
+    const volgaSwitch = createSwitch('volga', filter_volga, 'ПФ (Волга)');
+    const szSwitch = createSwitch('sz', filter_sz, 'ПФ (СЗ)');
+    const skSwitch = createSwitch('sk', filter_sk, 'ПФ (СК)');
+    const dvfSwitch = createSwitch('dvf', filter_dvf, 'ДВФ');
+    const sfSwitch = createSwitch('sf', filter_sf, 'СФ');
+    const ufSwitch = createSwitch('uf', filter_uf, 'УФ');
+    const cfSwitch = createSwitch('cf', filter_cf, 'ЦФ');
+
+    container.appendChild(volgaSwitch);
+    container.appendChild(southSwitch);
+    container.appendChild(szSwitch);
+    container.appendChild(skSwitch);
+    container.appendChild(dvfSwitch);
+    container.appendChild(sfSwitch);
+    container.appendChild(ufSwitch);
+    container.appendChild(cfSwitch);
+
+    // Выпадающий список филиалов
+    const branchSelectContainer = document.createElement('div');
+    branchSelectContainer.style.display = 'none';
+    const branchSelectLabel = document.createElement('span');
+    branchSelectLabel.textContent = 'Выберите филиалы:';
+    branchSelectLabel.style.fontSize = '14px';
+    branchSelectLabel.style.color = '#333';
+    branchSelectLabel.style.marginBottom = '5px';
+    branchSelectContainer.appendChild(branchSelectLabel);
+
+    const branchSelect = document.createElement('select');
+    branchSelect.multiple = true;
+    branchSelect.size = 8;
+    branchSelect.style.width = '100%';
+    branchSelect.style.padding = '5px';
+    branchSelect.style.border = '1px solid #ccc';
+    branchSelect.style.borderRadius = '5px';
+    branchSelectContainer.appendChild(branchSelect);
+    container.appendChild(branchSelectContainer);
+
+    // Логика отображения/скрытия филиалов
+    selectBranchSwitch.querySelector('input').addEventListener('change', () => {
+        const isChecked = selectBranchSwitch.querySelector('input').checked;
+        if (isChecked) {
+            southSwitch.style.display = 'none';
+            volgaSwitch.style.display = 'none';
+            szSwitch.style.display = 'none';
+            skSwitch.style.display = 'none';
+            dvfSwitch.style.display = 'none';
+            sfSwitch.style.display = 'none';
+            ufSwitch.style.display = 'none';
+            cfSwitch.style.display = 'none';
+            branchSelectContainer.style.display = 'block';
+            loadBranches();
+        } else {
+            southSwitch.style.display = 'flex';
+            volgaSwitch.style.display = 'flex';
+            szSwitch.style.display = 'flex';
+            skSwitch.style.display = 'flex';
+            dvfSwitch.style.display = 'flex';
+            sfSwitch.style.display = 'flex';
+            ufSwitch.style.display = 'flex';
+            cfSwitch.style.display = 'flex';
+            branchSelectContainer.style.display = 'none';
+        }
+    });
         // Добавляем контейнер в DOM после создания всех элементов
         container.appendChild(branchSelectContainer);
 
