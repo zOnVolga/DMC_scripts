@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Beeline DMC Data Extractor + AutoUpdater
 // @namespace    http://tampermonkey.net/
-// @version      7.2.7
+// @version      7.2.8
 // @description  Извлечение данных из Beeline DMC с возможностью автообновления и уведомлением о последнем коммите
 // @author       zOnVolga
 // @match        https://dmc.beeline.ru/*
@@ -19,9 +19,14 @@
 (function () {
     'use strict';
 
-    // Переменная для хранения Axios
+    // Глобальные переменные
     let axios = null;
     let axiosLoadedPromise = null;
+
+    // Переменные для работы модального окна
+    let branchSelect; // Теперь объявлена глобально
+    let confirmButton;
+    let selectedFilters = []; // Также глобально
 
     // Функция безопасной загрузки Axios
     function loadAxios() {
