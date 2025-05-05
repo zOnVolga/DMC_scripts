@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Beeline DMC Data Extractor + AutoUpdater
 // @namespace    http://tampermonkey.net/
-// @version      7.2.3
+// @version      7.2.4
 // @description  Извлечение данных из Beeline DMC с возможностью автообновления и уведомлением о последнем коммите
 // @author       zOnVolga
 // @match        https://dmc.beeline.ru/*
@@ -22,6 +22,7 @@
     // Переменная для хранения Axios
     let axios = null;
     let axiosLoadedPromise = null;
+    let selectedFilters = [];
 
     // Функция безопасной загрузки Axios
     function loadAxios() {
@@ -209,6 +210,7 @@
         document.body.appendChild(button);
     }
 
+    let branchSelect;
     // Безопасный showModal
 function showModal() {
     const modal = document.createElement('div');
@@ -318,7 +320,7 @@ function showModal() {
     branchSelectLabel.style.marginBottom = '5px';
     branchSelectContainer.appendChild(branchSelectLabel);
 
-    const branchSelect = document.createElement('select');
+    branchSelect = document.createElement('select');
     branchSelect.multiple = true;
     branchSelect.size = 8;
     branchSelect.style.width = '100%';
