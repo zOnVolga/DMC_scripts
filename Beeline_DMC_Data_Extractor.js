@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Beeline DMC Data Extractor + AutoUpdater
 // @namespace    http://tampermonkey.net/
-// @version      7.2.5
+// @version      7.2.3
 // @description  Извлечение данных из Beeline DMC с возможностью автообновления и уведомлением о последнем коммите
 // @author       zOnVolga
 // @match        https://dmc.beeline.ru/*
@@ -19,60 +19,8 @@
 (function () {
     'use strict';
 
-    // Переменная для хранения Axios
     let axios = null;
     let axiosLoadedPromise = null;
-    let selectedFilters = [];
-
-    // Функция безопасной загрузки Axios
-    function loadAxios() {
-        if (axiosLoadedPromise) return axiosLoadedPromise;
-
-        axiosLoadedPromise = new Promise((resolve, reject) => {
-            const script = document.createElement('script');
-            script.src = 'https://unpkg.com/axios@1.8.4/dist/axios.min.js';
-            script.onload = () => {
-                if (window.axios || unsafeWindow.axios) {
-                    axios = window.axios || unsafeWindow.axios;
-                    console.log('✅ Axios загружен через DOM');
-                    resolve();
-                } else {
-                    console.warn('⚠️ Axios не найден в window, пробуем через GM_xmlhttpRequest...');
-                    fallbackLoadAxios(resolve, reject);
-                }
-            };
-            script.onerror = () => {
-                console.error('❌ Ошибка загрузки Axios через DOM');
-                fallbackLoadAxios(resolve, reject);
-            };
-            document.head.appendChild(script);
-        });
-
-        return axiosLoadedPromise;
-    }
-
-    // Резервная загрузка Axios через GM_xmlhttpRequest
-    function fallbackLoadAxios(resolve, reject) {
-        GM_xmlhttpRequest({
-            method: 'GET',
-            url: 'https://unpkg.com/axios@1.6.7/dist/axios.min.js',
-            onload: function (response) {
-                try {
-                    eval(response.responseText); // Внедряем Axios как глобальную переменную
-                    axios = window.axios || unsafeWindow.axios;
-                    console.log('✅ Axios загружен через GM_xmlhttpRequest');
-                    resolve();
-                } catch (e) {
-                    console.error('❌ Ошибка при обработке Axios:', e);
-                    reject(e);
-                }
-            },
-            onerror: function (error) {
-                console.error('❌ Ошибка загрузки Axios через GM_xmlhttpRequest:', error);
-                reject(error);
-            }
-        });
-    }
 
     // Фильтры по филиалам
     const filter_south = "1b349473-eea7-48a0-8fd2-cfe108543bee,af71b045-5f0f-42f2-9033-1a82cdfbefb4,74ac0640-83a6-4973-a3fb-1e1b300a897c,a46571ce-4df0-4790-a09d-c733ca5dd6bc,f096da02-f05b-448f-87c6-e7d92fb65178,cb6d9423-526d-437b-8bb6-49967f4cc991";
@@ -151,7 +99,7 @@
         "Тамбовский": { delivery: "51.811241,39.202998", survey: "52.7212,41.4523" },
         "Астраханский": { delivery: "45.060946,41.999728", survey: "46.3477,48.0304" },
         "Волгоградский": { delivery: "47.338143,39.730760", survey: "48.7080,44.5133" },
-        "Махачкалинский": { delivery: "45.060946,41.999728", survey: "42.9831,47.5047" },
+        "Махачкалинский": { delivery: "45.060946,41.999728", survey: "43.2167,47.5047" },
         "Назрановский": { delivery: "45.060946,41.999728", survey: "43.2167,44.7667" },
         "Нальчикский": { delivery: "45.060946,41.999728", survey: "43.4853,43.6071" },
         "Элистинский": { delivery: "47.338143,39.730760", survey: "46.3078,44.2558" },
@@ -164,33 +112,53 @@
         "Сочинский": { delivery: "47.338143,39.730760", survey: "43.5855,39.7231" }
     };
 
-    // Проверка токена
-    function isToken(value) {
-        return typeof value === 'string' && value.split('.').length === 3;
+    let branchSelect; // Теперь объявлена глобально
+    let confirmButton;
+    let selectedFilters = [];
+
+    // --- Загрузка Axios ---
+    function loadAxios() {
+        if (axiosLoadedPromise) return axiosLoadedPromise;
+        axiosLoadedPromise = new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = 'https://unpkg.com/axios@1.8.4/dist/axios.min.js';
+            script.onload = () => {
+                axios = window.axios || unsafeWindow.axios;
+                console.log('✅ Axios загружен через DOM');
+                resolve();
+            };
+            script.onerror = () => {
+                console.error('❌ Ошибка загрузки Axios через DOM');
+                fallbackLoadAxios(resolve, reject);
+            };
+            document.head.appendChild(script);
+        });
+        return axiosLoadedPromise;
     }
 
-    // Поиск токена
-    function findToken() {
-        for (const key in localStorage) {
-            const value = localStorage.getItem(key);
-            if (isToken(value)) return value;
-        }
-        for (const key in sessionStorage) {
-            const value = sessionStorage.getItem(key);
-            if (isToken(value)) return value;
-        }
-        return getCookie('token');
+    function fallbackLoadAxios(resolve, reject) {
+        GM_xmlhttpRequest({
+            method: 'GET',
+            url: 'https://unpkg.com/axios@1.6.7/dist/axios.min.js',
+            onload: function (response) {
+                try {
+                    eval(response.responseText);
+                    axios = window.axios || unsafeWindow.axios;
+                    console.log('✅ Axios загружен через GM_xmlhttpRequest');
+                    resolve();
+                } catch (e) {
+                    console.error('❌ Ошибка при обработке Axios:', e);
+                    reject(e);
+                }
+            },
+            onerror: function (error) {
+                console.error('❌ Ошибка загрузки Axios через GM_xmlhttpRequest:', error);
+                reject(error);
+            }
+        });
     }
 
-    // Получение cookie
-    function getCookie(name) {
-        const matches = document.cookie.match(new RegExp(
-            "(?:^|; )" + name.replace(/([\.$?*|{}\(\)\[\]\\\/\+^])/g, '\\$1') + "=([^;]*)"
-        ));
-        return matches ? decodeURIComponent(matches[1]) : undefined;
-    }
-
-    // Создание кнопки
+    // --- Создание кнопки ---
     function createButton() {
         const button = document.createElement('button');
         button.textContent = '📋 Копировать данные в буфер обмена';
@@ -210,165 +178,228 @@
         document.body.appendChild(button);
     }
 
-    let branchSelect;
-    // Безопасный showModal
-function showModal() {
-    const modal = document.createElement('div');
-    modal.style.position = 'fixed';
-    modal.style.top = '50%';
-    modal.style.left = '50%';
-    modal.style.transform = 'translate(-50%, -50%)';
-    modal.style.backgroundColor = '#fff';
-    modal.style.padding = '20px';
-    modal.style.borderRadius = '10px';
-    modal.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
-    modal.style.zIndex = '10000';
-    modal.style.width = '300px';
-    modal.style.textAlign = 'center';
+    // --- Проверка токена ---
+    function isToken(value) {
+        return typeof value === 'string' && value.split('.').length === 3;
+    }
 
-    const title = document.createElement('h3');
-    title.textContent = 'Выберите фильтры';
-    modal.appendChild(title);
-
-    const container = document.createElement('div');
-    container.style.display = 'flex';
-    container.style.flexDirection = 'column';
-    container.style.gap = '10px';
-    modal.appendChild(container);
-
-    // Функция для создания современного переключателя
-    const createSwitch = (id, value, label, isChecked = false) => {
-        const switchContainer = document.createElement('label');
-        switchContainer.style.display = 'flex';
-        switchContainer.style.alignItems = 'center';
-        switchContainer.style.gap = '10px';
-
-        const checkbox = document.createElement('input');
-        checkbox.type = 'checkbox';
-        checkbox.id = id;
-        checkbox.value = value;
-        checkbox.checked = isChecked;
-        checkbox.style.display = 'none';
-
-        const slider = document.createElement('span');
-        slider.style.position = 'relative';
-        slider.style.width = '40px';
-        slider.style.height = '20px';
-        slider.style.backgroundColor = isChecked ? '#4CAF50' : '#ccc';
-        slider.style.borderRadius = '20px';
-        slider.style.cursor = 'pointer';
-        slider.style.transition = 'background-color 0.3s';
-
-        const circle = document.createElement('span');
-        circle.style.position = 'absolute';
-        circle.style.width = '16px';
-        circle.style.height = '16px';
-        circle.style.backgroundColor = '#fff';
-        circle.style.borderRadius = '50%';
-        circle.style.top = '2px';
-        circle.style.left = isChecked ? '22px' : '2px';
-        circle.style.transition = 'left 0.3s';
-
-        slider.appendChild(circle);
-        checkbox.addEventListener('change', () => {
-            slider.style.backgroundColor = checkbox.checked ? '#4CAF50' : '#ccc';
-            circle.style.left = checkbox.checked ? '22px' : '2px';
-        });
-
-        const labelElement = document.createElement('span');
-        labelElement.textContent = label;
-        labelElement.style.fontSize = '14px';
-        labelElement.style.color = '#333';
-
-        switchContainer.appendChild(checkbox);
-        switchContainer.appendChild(slider);
-        switchContainer.appendChild(labelElement);
-
-        return switchContainer;
-    };
-
-    // Переключатель "Выбрать филиал"
-    const selectBranchSwitch = createSwitch('selectBranch', 'true', 'Выбрать филиал');
-    container.appendChild(selectBranchSwitch);
-
-    // Переключатели регионов
-    const southSwitch = createSwitch('south', filter_south, 'ПФ (Юг)');
-    const volgaSwitch = createSwitch('volga', filter_volga, 'ПФ (Волга)');
-    const szSwitch = createSwitch('sz', filter_sz, 'ПФ (СЗ)');
-    const skSwitch = createSwitch('sk', filter_sk, 'ПФ (СК)');
-    const dvfSwitch = createSwitch('dvf', filter_dvf, 'ДВФ');
-    const sfSwitch = createSwitch('sf', filter_sf, 'СФ');
-    const ufSwitch = createSwitch('uf', filter_uf, 'УФ');
-    const cfSwitch = createSwitch('cf', filter_cf, 'ЦФ');
-
-    container.appendChild(volgaSwitch);
-    container.appendChild(southSwitch);
-    container.appendChild(szSwitch);
-    container.appendChild(skSwitch);
-    container.appendChild(dvfSwitch);
-    container.appendChild(sfSwitch);
-    container.appendChild(ufSwitch);
-    container.appendChild(cfSwitch);
-
-    // Выпадающий список филиалов
-    const branchSelectContainer = document.createElement('div');
-    branchSelectContainer.style.display = 'none';
-    const branchSelectLabel = document.createElement('span');
-    branchSelectLabel.textContent = 'Выберите филиалы:';
-    branchSelectLabel.style.fontSize = '14px';
-    branchSelectLabel.style.color = '#333';
-    branchSelectLabel.style.marginBottom = '5px';
-    branchSelectContainer.appendChild(branchSelectLabel);
-
-    branchSelect = document.createElement('select');
-    branchSelect.multiple = true;
-    branchSelect.size = 8;
-    branchSelect.style.width = '100%';
-    branchSelect.style.padding = '5px';
-    branchSelect.style.border = '1px solid #ccc';
-    branchSelect.style.borderRadius = '5px';
-    branchSelectContainer.appendChild(branchSelect);
-    container.appendChild(branchSelectContainer);
-
-    // Логика отображения/скрытия филиалов
-    selectBranchSwitch.querySelector('input').addEventListener('change', () => {
-        const isChecked = selectBranchSwitch.querySelector('input').checked;
-        if (isChecked) {
-            southSwitch.style.display = 'none';
-            volgaSwitch.style.display = 'none';
-            szSwitch.style.display = 'none';
-            skSwitch.style.display = 'none';
-            dvfSwitch.style.display = 'none';
-            sfSwitch.style.display = 'none';
-            ufSwitch.style.display = 'none';
-            cfSwitch.style.display = 'none';
-            branchSelectContainer.style.display = 'block';
-            loadBranches();
-        } else {
-            southSwitch.style.display = 'flex';
-            volgaSwitch.style.display = 'flex';
-            szSwitch.style.display = 'flex';
-            skSwitch.style.display = 'flex';
-            dvfSwitch.style.display = 'flex';
-            sfSwitch.style.display = 'flex';
-            ufSwitch.style.display = 'flex';
-            cfSwitch.style.display = 'flex';
-            branchSelectContainer.style.display = 'none';
+    function findToken() {
+        for (const key in localStorage) {
+            const value = localStorage.getItem(key);
+            if (isToken(value)) return value;
         }
-    });
-        // Добавляем контейнер в DOM после создания всех элементов
-        container.appendChild(branchSelectContainer);
+        for (const key in sessionStorage) {
+            const value = sessionStorage.getItem(key);
+            if (isToken(value)) return value;
+        }
+        return getCookie('token');
+    }
 
-        // --- Кнопка "Только незавершенные" (только на странице задач) ---
+    function getCookie(name) {
+        const matches = document.cookie.match(new RegExp(
+            "(?:^|; )" + name.replace(/([\.$?*|{}\(\)\[\]\\\/\+^])/g, '\\$1') + "=([^;]*)"
+        ));
+        return matches ? decodeURIComponent(matches[1]) : undefined;
+    }
+
+    // --- Модальное окно ---
+    function showModal() {
+        const modal = document.createElement('div');
+        modal.style.position = 'fixed';
+        modal.style.top = '50%';
+        modal.style.left = '50%';
+        modal.style.transform = 'translate(-50%, -50%)';
+        modal.style.backgroundColor = '#fff';
+        modal.style.padding = '20px';
+        modal.style.borderRadius = '10px';
+        modal.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
+        modal.style.zIndex = '10000';
+        modal.style.width = '300px';
+        modal.style.textAlign = 'center';
+
+        const title = document.createElement('h3');
+        title.textContent = 'Выберите фильтры';
+        modal.appendChild(title);
+
+        const container = document.createElement('div');
+        container.style.display = 'flex';
+        container.style.flexDirection = 'column';
+        container.style.gap = '10px';
+        modal.appendChild(container);
+
+        // --- Переключатель "Выбрать филиал" ---
+        const createSwitch = (id, value, label, isChecked = false) => {
+            const switchContainer = document.createElement('label');
+            switchContainer.style.display = 'flex';
+            switchContainer.style.alignItems = 'center';
+            switchContainer.style.gap = '10px';
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.id = id;
+            checkbox.value = value;
+            checkbox.checked = isChecked;
+            checkbox.style.display = 'none';
+
+            const slider = document.createElement('span');
+            slider.style.position = 'relative';
+            slider.style.width = '40px';
+            slider.style.height = '20px';
+            slider.style.backgroundColor = isChecked ? '#4CAF50' : '#ccc';
+            slider.style.borderRadius = '20px';
+            slider.style.cursor = 'pointer';
+            slider.style.transition = 'background-color 0.3s';
+
+            const circle = document.createElement('span');
+            circle.style.position = 'absolute';
+            circle.style.width = '16px';
+            circle.style.height = '16px';
+            circle.style.backgroundColor = '#fff';
+            circle.style.borderRadius = '50%';
+            circle.style.top = '2px';
+            circle.style.left = isChecked ? '22px' : '2px';
+            circle.style.transition = 'left 0.3s';
+
+            slider.appendChild(circle);
+
+            const labelElement = document.createElement('span');
+            labelElement.textContent = label;
+            labelElement.style.fontSize = '14px';
+            labelElement.style.color = '#333';
+
+            switchContainer.appendChild(checkbox);
+            switchContainer.appendChild(slider);
+            switchContainer.appendChild(labelElement);
+
+            // Добавляем ссылки для удобства
+            switchContainer.checkbox = checkbox;
+            switchContainer.switchContainer = switchContainer;
+
+            checkbox.addEventListener('change', () => {
+                slider.style.backgroundColor = checkbox.checked ? '#4CAF50' : '#ccc';
+                circle.style.left = checkbox.checked ? '22px' : '2px';
+            });
+
+            return switchContainer;
+        };
+
+        const selectBranchSwitch = createSwitch('selectBranch', 'true', 'Выбрать филиал');
+        container.appendChild(selectBranchSwitch.switchContainer);
+
+        const southSwitch = createSwitch('south', filter_south, 'ПФ (Юг)');
+        const volgaSwitch = createSwitch('volga', filter_volga, 'ПФ (Волга)');
+        const szSwitch = createSwitch('sz', filter_sz, 'ПФ (СЗ)');
+        const skSwitch = createSwitch('sk', filter_sk, 'ПФ (СК)');
+        const dvfSwitch = createSwitch('dvf', filter_dvf, 'ДВФ');
+        const sfSwitch = createSwitch('sf', filter_sf, 'СФ');
+        const ufSwitch = createSwitch('uf', filter_uf, 'УФ');
+        const cfSwitch = createSwitch('cf', filter_cf, 'ЦФ');
+
+        container.appendChild(volgaSwitch.switchContainer);
+        container.appendChild(southSwitch.switchContainer);
+        container.appendChild(szSwitch.switchContainer);
+        container.appendChild(skSwitch.switchContainer);
+        container.appendChild(dvfSwitch.switchContainer);
+        container.appendChild(sfSwitch.switchContainer);
+        container.appendChild(ufSwitch.switchContainer);
+        container.appendChild(cfSwitch.switchContainer);
+
+        // --- Кнопка "Только незавершенные" (только на странице /processes) ---
         let uncompletedTasksSwitch = null;
         if (window.location.href.includes('/processes')) {
             uncompletedTasksSwitch = createSwitch('uncompleted', 'true', 'Только незавершенные');
             container.appendChild(uncompletedTasksSwitch);
         }
 
-        // --- Кнопки "Подтвердить" и "Отмена" ---
+        // --- Кнопка "Подтвердить" ---
+        const confirmButton = document.createElement('button');
+        confirmButton.textContent = 'Подтвердить';
+        confirmButton.style.padding = '10px 20px';
+        confirmButton.style.backgroundColor = '#4CAF50';
+        confirmButton.style.color = 'white';
+        confirmButton.style.border = 'none';
+        confirmButton.style.borderRadius = '5px';
+        confirmButton.style.cursor = 'pointer';
+        confirmButton.style.fontSize = '16px';
+        confirmButton.style.marginTop = '20px';
+        confirmButton.disabled = true; // По умолчанию отключена
+
+        // --- Кнопка "Отмена" ---
+        const cancelButton = document.createElement('button');
+        cancelButton.textContent = 'Отмена';
+        cancelButton.style.padding = '10px 20px';
+        cancelButton.style.backgroundColor = '#f44336';
+        cancelButton.style.color = 'white';
+        cancelButton.style.border = 'none';
+        cancelButton.style.borderRadius = '5px';
+        cancelButton.style.cursor = 'pointer';
+        cancelButton.style.fontSize = '16px';
+        cancelButton.style.marginTop = '20px';
+        cancelButton.style.marginLeft = '10px';
+
+        // --- Контейнер для кнопок ---
+        const buttonContainer = document.createElement('div');
+        buttonContainer.style.display = 'flex';
+        buttonContainer.style.justifyContent = 'space-between';
+        buttonContainer.appendChild(confirmButton);
+        buttonContainer.appendChild(cancelButton);
+        modal.appendChild(buttonContainer);
+
+        // --- Добавляем модальное окно на страницу ---
+        document.body.appendChild(modal);
+
+        // --- Логика отображения/скрытия филиалов ---
+        selectBranchSwitch.querySelector('input').addEventListener('change', () => {
+            const isChecked = selectBranchSwitch.querySelector('input').checked;
+            if (isChecked) {
+                southSwitch.style.display = 'none';
+                volgaSwitch.style.display = 'none';
+                szSwitch.style.display = 'none';
+                skSwitch.style.display = 'none';
+                dvfSwitch.style.display = 'none';
+                sfSwitch.style.display = 'none';
+                ufSwitch.style.display = 'none';
+                cfSwitch.style.display = 'none';
+                branchSelectContainer.style.display = 'block';
+                loadBranches();
+            } else {
+                southSwitch.style.display = 'flex';
+                volgaSwitch.style.display = 'flex';
+                szSwitch.style.display = 'flex';
+                skSwitch.style.display = 'flex';
+                dvfSwitch.style.display = 'flex';
+                sfSwitch.style.display = 'flex';
+                ufSwitch.style.display = 'flex';
+                cfSwitch.style.display = 'flex';
+                branchSelectContainer.style.display = 'none';
+            }
+            updateConfirmButtonState(); // Обновляем состояние кнопки "Подтвердить"
+        });
+
+        // --- Обработчики событий для обновления состояния кнопки "Подтвердить" ---
+        function updateConfirmButtonState() {
+            const hasSelection =
+                selectBranchSwitch.querySelector('input').checked ||
+                southSwitch.querySelector('input').checked ||
+                volgaSwitch.querySelector('input').checked ||
+                szSwitch.querySelector('input').checked ||
+                skSwitch.querySelector('input').checked ||
+                dvfSwitch.querySelector('input').checked ||
+                sfSwitch.querySelector('input').checked ||
+                ufSwitch.querySelector('input').checked ||
+                cfSwitch.querySelector('input').checked;
+
+            confirmButton.disabled = !hasSelection;
+        }
+
+        [southSwitch, volgaSwitch, szSwitch, skSwitch, dvfSwitch, sfSwitch, ufSwitch, cfSwitch, selectBranchSwitch].forEach(switchEl => {
+            switchEl.querySelector('input').addEventListener('change', updateConfirmButtonState);
+        });
+
+        // --- Обработчик кнопки "Подтвердить" ---
         confirmButton.addEventListener('click', () => {
             selectedFilters = [];
+
             if (selectBranchSwitch.querySelector('input').checked) {
                 const selectedBranches = Array.from(branchSelect.selectedOptions).map(option => option.value);
                 if (selectedBranches.length > 0) {
@@ -387,50 +418,40 @@ function showModal() {
                 if (ufSwitch.querySelector('input').checked) selectedFilters.push(ufSwitch.querySelector('input').value);
                 if (cfSwitch.querySelector('input').checked) selectedFilters.push(cfSwitch.querySelector('input').value);
             }
-        
+
             const uncompletedTasks = uncompletedTasksSwitch && uncompletedTasksSwitch.querySelector('input').checked || false;
             console.log(`🔍 Выбран фильтр "Только незавершенные": ${uncompletedTasks}`);
             document.body.removeChild(modal);
             extractData(uncompletedTasks);
         });
 
-        // --- Кнопка "Отмена" ---
-        const cancelButton = document.createElement('button');
-        cancelButton.textContent = 'Отмена';
-        cancelButton.style.padding = '10px 20px';
-        cancelButton.style.backgroundColor = '#f44336';
-        cancelButton.style.color = 'white';
-        cancelButton.style.border = 'none';
-        cancelButton.style.borderRadius = '5px';
-        cancelButton.style.cursor = 'pointer';
-        cancelButton.style.fontSize = '16px';
-        cancelButton.style.marginTop = '20px';
-        cancelButton.style.marginLeft = '10px';
+        // --- Обработчик кнопки "Отмена" ---
         cancelButton.addEventListener('click', () => {
             document.body.removeChild(modal);
         });
-
+    }
         // --- Контейнер для кнопок ---
         const buttonContainer = document.createElement('div');
         buttonContainer.style.display = 'flex';
         buttonContainer.style.justifyContent = 'space-between';
         buttonContainer.appendChild(confirmButton);
         buttonContainer.appendChild(cancelButton);
-
         modal.appendChild(buttonContainer);
+
+        // Добавляем модальное окно на страницу
         document.body.appendChild(modal);
     }
 
-    // Функция для извлечения данных в зависимости от URL
-    function extractData(uncompletedTasks) {
+        function extractData(uncompletedTasks) {
         if (window.location.href.includes('/projects')) {
             extractProjectData();
         } else if (window.location.href.includes('/processes')) {
             extractTaskData(uncompletedTasks);
+        } else {
+            alert('❌ Неизвестная страница. Скрипт работает только на /projects или /processes.');
         }
     }
 
-    // Функция для получения количества проектов
     async function extractProjectData() {
         if (!axios) {
             console.error('❌ Axios не загружен');
@@ -441,6 +462,7 @@ function showModal() {
         const filter_branch = selectedFilters.join(',').replace(/,$/, '');
         const url = `https://dmc.beeline.ru/api/projects/projects/?page=1&page_size=1&branch=${filter_branch}`;
         const token = findToken();
+
         if (!token) {
             console.error('❌ Токен не найден');
             alert('Токен не найден');
@@ -458,7 +480,6 @@ function showModal() {
         }
     }
 
-    // Функция для получения количества задач
     async function extractTaskData(uncompletedTasks) {
         if (!axios) {
             console.error('❌ Axios не загружен');
@@ -469,6 +490,7 @@ function showModal() {
         const filter_branch = selectedFilters.join(',').replace(/,$/, '');
         const url = `https://dmc.beeline.ru/api/processes/tasks/?gpo=&page=1&page_size=1&branch=${filter_branch}&uncompleted_tasks=${uncompletedTasks}`;
         const token = findToken();
+
         if (!token) {
             console.error('❌ Токен не найден');
             alert('Токен не найден');
@@ -486,14 +508,14 @@ function showModal() {
         }
     }
 
-    // Функция для получения всех проектов
     async function fetchProjects(totalItems) {
         const token = findToken();
         if (!token) return console.error('❌ Токен не найден');
 
         const filter_branch = selectedFilters.join(',').replace(/,$/, '');
         const url = `https://dmc.beeline.ru/api/projects/projects/?page=1&page_size=${totalItems}&branch=${filter_branch}`;
-        console.log(`🚀 Формируем URL для проектов: ${url}`);
+
+        console.log(`🚀 Запрашиваем проекты: ${url}`);
 
         try {
             const response = await axios.get(url, { headers: { 'Authorization': `Bearer ${token}` } });
@@ -506,21 +528,22 @@ function showModal() {
                 copyToClipboard(processedTableHTML);
                 alert('📋 Данные скопированы в буфер обмена. Вставьте их в Excel.');
             } else {
-                console.log('⚠️ Нет данных для отображения.');
+                alert('⚠️ Нет данных для отображения.');
             }
         } catch (error) {
             console.error('❌ Ошибка при получении данных о проектах:', error);
+            alert('Не удалось получить данные о проектах');
         }
     }
 
-    // Функция для получения всех задач
     async function fetchTasks(totalItems, uncompletedTasks) {
         const token = findToken();
         if (!token) return console.error('❌ Токен не найден');
 
         const filter_branch = selectedFilters.join(',').replace(/,$/, '');
         const url = `https://dmc.beeline.ru/api/processes/tasks/?gpo=&page=1&page_size=${totalItems}&branch=${filter_branch}&uncompleted_tasks=${uncompletedTasks}`;
-        console.log(`🚀 Формируем URL для задач: ${url}`);
+
+        console.log(`🚀 Запрашиваем задачи: ${url}`);
 
         try {
             const response = await axios.get(url, { headers: { 'Authorization': `Bearer ${token}` } });
@@ -533,20 +556,21 @@ function showModal() {
                 copyToClipboard(processedTableHTML);
                 alert('📋 Данные скопированы в буфер обмена. Вставьте их в Excel.');
             } else {
-                console.log('⚠️ Нет данных для отображения.');
+                alert('⚠️ Нет данных для отображения.');
             }
         } catch (error) {
             console.error('❌ Ошибка при получении данных о задачах:', error);
+            alert('Не удалось получить данные о задачах');
         }
     }
 
-    // Функция для создания таблицы из данных
     function createTableFromData(data, type) {
         const table = document.createElement('table');
         table.setAttribute('cellspacing', '0');
         table.setAttribute('class', 'style__TableStyled-sc-1c82g3t-0 cobzxA');
 
-        let headers;
+        let headers = [];
+
         if (type === 'project') {
             headers = [
                 'region',
@@ -623,10 +647,8 @@ function showModal() {
             headers.forEach(header => {
                 const td = document.createElement('td');
                 td.setAttribute('class', 'style__TableCellStyled-sc-1c82g3t-3 lguZrP');
-
                 const div = document.createElement('div');
                 div.setAttribute('class', 'style__TableCellContentStyled-sc-1c82g3t-5 ePYmXN');
-
                 const span = document.createElement('span');
 
                 if (type === 'project') {
@@ -634,31 +656,31 @@ function showModal() {
                         const match = item[header]?.match(/\(([^)]+)\)/);
                         if (match) {
                             const coords = match[1].split(' ');
-                            const lat = coords[0]; // Широта
-                            const lng = coords[1]; // Долгота
+                            const lat = coords[0];
+                            const lng = coords[1];
                             const link = document.createElement('a');
-                            link.href = `https://yandex.ru/maps/?pt=${lat},${lng}&z=16&l=skl`;
-                            link.textContent = `${lat},${lng}`;
+                            link.href = `https://yandex.ru/maps/?pt=${lng},${lat}&z=16&l=skl`;
+                            link.textContent = `${lat}, ${lng}`;
                             span.appendChild(link);
                         } else {
                             span.textContent = item[header] || '';
                         }
                     } else if (header === 'route_LL' || header === 'route_PPO') {
-                        const branchName = item.branch; // Предполагается, что есть поле branch
+                        const branchName = item.branch;
                         const branchCoords = branchCoordinates[branchName];
                         const geoMatch = item.geo?.match(/\(([^)]+)\)/);
                         let projectCoords = '';
                         if (geoMatch) {
                             const coords = geoMatch[1].split(' ');
-                            const lat = coords[0]; // Широта
-                            const lng = coords[1]; // Долгота
+                            const lat = coords[0];
+                            const lng = coords[1];
                             projectCoords = `${lng},${lat}`;
                         }
 
                         if (header === 'route_LL') {
                             if (branchCoords && branchCoords.delivery && projectCoords) {
-                                const deliveryCoords = branchCoords.delivery;
-                                const url = `https://yandex.ru/maps/?rtext=${deliveryCoords}~${projectCoords}&mode=routes&routes%5Bavoid%5D=tolls%2Cunpaved%2Cpoor_condition&rtm=atm&rtt=auto&ruri=~`;
+                                const deliveryCoords = branchCoords.delivery.split(',').map(c => c.trim());
+                                const url = `https://yandex.ru/maps/?rtext=${deliveryCoords[0]},${deliveryCoords[1]}~${projectCoords}&mode=routes&routes%5Bavoid%5D=tolls%2Cunpaved%2Cpoor_condition&rtm=atm&rtt=auto&ruri=~`;
                                 const link = document.createElement('a');
                                 link.href = url;
                                 link.textContent = 'Доставка ->>>';
@@ -669,11 +691,11 @@ function showModal() {
                             }
                         } else if (header === 'route_PPO') {
                             if (branchCoords && branchCoords.survey && projectCoords) {
-                                const surveyCoords = branchCoords.survey;
-                                const url = `https://yandex.ru/maps/?rtext=${surveyCoords}~${projectCoords}&mode=routes&routes%5Bavoid%5D=tolls%2Cunpaved%2Cpoor_condition&rtm=atm&rtt=auto&ruri=~`;
+                                const surveyCoords = branchCoords.survey.split(',').map(c => c.trim());
+                                const url = `https://yandex.ru/maps/?rtext=${surveyCoords[0]},${surveyCoords[1]}~${projectCoords}&mode=routes&routes%5Bavoid%5D=tolls%2Cunpaved%2Cpoor_condition&rtm=atm&rtt=auto&ruri=~`;
                                 const link = document.createElement('a');
                                 link.href = url;
-                                link.textContent = 'Обсл-е ->>>';
+                                link.textContent = 'Обследование ->>>';
                                 link.target = '_blank';
                                 span.appendChild(link);
                             } else {
@@ -702,26 +724,6 @@ function showModal() {
         return table.outerHTML;
     }
 
-    // Функция для перевода кода статуса в текстовое значение
-    function getStatusName(code) {
-        const statusMap = {
-            1: 'Планируется',
-            2: 'Выполняется',
-            5: 'Выполнена'
-        };
-        return statusMap[code] || 'Неизвестный статус';
-    }
-
-    // Функция для копирования текста в буфер обмена
-    function copyToClipboard(text) {
-        navigator.clipboard.writeText(text).then(() => {
-            console.log('📋 Текст скопирован в буфер обмена');
-        }).catch(err => {
-            console.error('❌ Ошибка при копировании в буфер обмена:', err);
-        });
-    }
-
-    // Функция для удаления лишних столбцов и переименования оставшихся
     function processTable(tableHTML, type) {
         const parser = new DOMParser();
         const doc = parser.parseFromString(tableHTML, 'text/html');
@@ -733,9 +735,7 @@ function showModal() {
             const cells = row.querySelectorAll('td');
             if (type === 'project') {
                 for (let i = 24; i < cells.length; i++) {
-                    if (cells[i]) {
-                        cells[i].remove();
-                    }
+                    if (cells[i]) cells[i].remove();
                 }
             }
         });
@@ -793,16 +793,21 @@ function showModal() {
         headerCells.forEach((cell, index) => {
             if (index < newHeaders.length) {
                 const span = cell.querySelector('span');
-                if (span) {
-                    span.textContent = newHeaders[index];
-                }
+                if (span) span.textContent = newHeaders[index];
             }
         });
 
         return table.outerHTML;
     }
 
-    // Функция для загрузки списка филиалов через API
+    function copyToClipboard(text) {
+        navigator.clipboard.writeText(text).then(() => {
+            console.log('📋 Текст скопирован в буфер обмена');
+        }).catch(err => {
+            console.error('❌ Ошибка при копировании в буфер обмена:', err);
+        });
+    }
+
     async function loadBranches() {
         const token = findToken();
         if (!token) {
@@ -815,13 +820,10 @@ function showModal() {
             const response = await axios.get('https://dmc.beeline.ru/api/catalogs/branches/?region=', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-
             const branches = response.data;
 
-            // Очистка предыдущих опций
-            branchSelect.innerHTML = '';
+            branchSelect.innerHTML = ''; // Очистка предыдущих опций
 
-            // Добавление филиалов как опций
             branches.forEach(branch => {
                 const option = document.createElement('option');
                 option.value = branch.id;
