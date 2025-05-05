@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Beeline DMC Data Extractor + AutoUpdater
 // @namespace    http://tampermonkey.net/
-// @version      7.2.6
+// @version      7.2.7
 // @description  Извлечение данных из Beeline DMC с возможностью автообновления и уведомлением о последнем коммите
 // @author       zOnVolga
 // @match        https://dmc.beeline.ru/*
@@ -19,8 +19,57 @@
 (function () {
     'use strict';
 
+    // Переменная для хранения Axios
     let axios = null;
     let axiosLoadedPromise = null;
+
+    // Функция безопасной загрузки Axios
+    function loadAxios() {
+        if (axiosLoadedPromise) return axiosLoadedPromise;
+        axiosLoadedPromise = new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = 'https://unpkg.com/axios@1.8.4/dist/axios.min.js';
+            script.onload = () => {
+                if (window.axios || unsafeWindow.axios) {
+                    axios = window.axios || unsafeWindow.axios;
+                    console.log('✅ Axios загружен через DOM');
+                    resolve();
+                } else {
+                    console.warn('⚠️ Axios не найден в window, пробуем через GM_xmlhttpRequest...');
+                    fallbackLoadAxios(resolve, reject);
+                }
+            };
+            script.onerror = () => {
+                console.error('❌ Ошибка загрузки Axios через DOM');
+                fallbackLoadAxios(resolve, reject);
+            };
+            document.head.appendChild(script);
+        });
+        return axiosLoadedPromise;
+    }
+
+    // Резервная загрузка Axios через GM_xmlhttpRequest
+    function fallbackLoadAxios(resolve, reject) {
+        GM_xmlhttpRequest({
+            method: 'GET',
+            url: 'https://unpkg.com/axios@1.6.7/dist/axios.min.js',
+            onload: function (response) {
+                try {
+                    eval(response.responseText); // Внедряем Axios как глобальную переменную
+                    axios = window.axios || unsafeWindow.axios;
+                    console.log('✅ Axios загружен через GM_xmlhttpRequest');
+                    resolve();
+                } catch (e) {
+                    console.error('❌ Ошибка при обработке Axios:', e);
+                    reject(e);
+                }
+            },
+            onerror: function (error) {
+                console.error('❌ Ошибка загрузки Axios через GM_xmlhttpRequest:', error);
+                reject(error);
+            }
+        });
+    }
 
     // Фильтры по филиалам
     const filter_south = "1b349473-eea7-48a0-8fd2-cfe108543bee,af71b045-5f0f-42f2-9033-1a82cdfbefb4,74ac0640-83a6-4973-a3fb-1e1b300a897c,a46571ce-4df0-4790-a09d-c733ca5dd6bc,f096da02-f05b-448f-87c6-e7d92fb65178,cb6d9423-526d-437b-8bb6-49967f4cc991";
@@ -85,7 +134,7 @@
         "Курганский": { delivery: "56.749333,60.757527", survey: "55.4408,65.3411" },
         "Пермский": { delivery: "", survey: "58.0105,56.2294" },
         "Екатеринбургский": { delivery: "56.749333,60.757527", survey: "56.8389,60.6057" },
-        "Тюменский": { delivery: "56.749333,60.757527", survey: "57.1530,65.5343" },
+        "Тюменский": { delivery: "56.749333,60.757527", survey: "57.1530,65.3411" },
         "Ижевский": { delivery: "55.920003,49.115999", survey: "56.845096,53.188089" },
         "Челябинский": { delivery: "56.749333,60.757527", survey: "55.1599,61.4026" },
         "Тольяттинский": { delivery: "55.920003,49.115999", survey: "53.507852,49.420411" },
@@ -112,53 +161,33 @@
         "Сочинский": { delivery: "47.338143,39.730760", survey: "43.5855,39.7231" }
     };
 
-    let branchSelect; // Теперь объявлена глобально
-    let confirmButton;
-    let selectedFilters = [];
-
-    // --- Загрузка Axios ---
-    function loadAxios() {
-        if (axiosLoadedPromise) return axiosLoadedPromise;
-        axiosLoadedPromise = new Promise((resolve, reject) => {
-            const script = document.createElement('script');
-            script.src = 'https://unpkg.com/axios@1.8.4/dist/axios.min.js';
-            script.onload = () => {
-                axios = window.axios || unsafeWindow.axios;
-                console.log('✅ Axios загружен через DOM');
-                resolve();
-            };
-            script.onerror = () => {
-                console.error('❌ Ошибка загрузки Axios через DOM');
-                fallbackLoadAxios(resolve, reject);
-            };
-            document.head.appendChild(script);
-        });
-        return axiosLoadedPromise;
+    // Проверка токена
+    function isToken(value) {
+        return typeof value === 'string' && value.split('.').length === 3;
     }
 
-    function fallbackLoadAxios(resolve, reject) {
-        GM_xmlhttpRequest({
-            method: 'GET',
-            url: 'https://unpkg.com/axios@1.6.7/dist/axios.min.js',
-            onload: function (response) {
-                try {
-                    eval(response.responseText);
-                    axios = window.axios || unsafeWindow.axios;
-                    console.log('✅ Axios загружен через GM_xmlhttpRequest');
-                    resolve();
-                } catch (e) {
-                    console.error('❌ Ошибка при обработке Axios:', e);
-                    reject(e);
-                }
-            },
-            onerror: function (error) {
-                console.error('❌ Ошибка загрузки Axios через GM_xmlhttpRequest:', error);
-                reject(error);
-            }
-        });
+    // Поиск токена
+    function findToken() {
+        for (const key in localStorage) {
+            const value = localStorage.getItem(key);
+            if (isToken(value)) return value;
+        }
+        for (const key in sessionStorage) {
+            const value = sessionStorage.getItem(key);
+            if (isToken(value)) return value;
+        }
+        return getCookie('token');
     }
 
-    // --- Создание кнопки ---
+    // Получение cookie
+    function getCookie(name) {
+        const matches = document.cookie.match(new RegExp(
+            "(?:^|; )" + name.replace(/([\.$?*|{}\(\)\[\]\\\/\+^])/g, '\\$1') + "=([^;]*)"
+        ));
+        return matches ? decodeURIComponent(matches[1]) : undefined;
+    }
+
+    // Создание кнопки
     function createButton() {
         const button = document.createElement('button');
         button.textContent = '📋 Копировать данные в буфер обмена';
@@ -178,32 +207,8 @@
         document.body.appendChild(button);
     }
 
-    // --- Проверка токена ---
-    function isToken(value) {
-        return typeof value === 'string' && value.split('.').length === 3;
-    }
-
-    function findToken() {
-        for (const key in localStorage) {
-            const value = localStorage.getItem(key);
-            if (isToken(value)) return value;
-        }
-        for (const key in sessionStorage) {
-            const value = sessionStorage.getItem(key);
-            if (isToken(value)) return value;
-        }
-        return getCookie('token');
-    }
-
-    function getCookie(name) {
-        const matches = document.cookie.match(new RegExp(
-            "(?:^|; )" + name.replace(/([\.$?*|{}\(\)\[\]\\\/\+^])/g, '\\$1') + "=([^;]*)"
-        ));
-        return matches ? decodeURIComponent(matches[1]) : undefined;
-    }
-
-    // --- Модальное окно ---
-    function showModal() {
+    // Безопасный showModal
+    async function showModal() {
         const modal = document.createElement('div');
         modal.style.position = 'fixed';
         modal.style.top = '50%';
@@ -227,7 +232,7 @@
         container.style.gap = '10px';
         modal.appendChild(container);
 
-        // --- Переключатель "Выбрать филиал" ---
+        // Функция создания переключателя
         const createSwitch = (id, value, label, isChecked = false) => {
             const switchContainer = document.createElement('label');
             switchContainer.style.display = 'flex';
@@ -261,6 +266,10 @@
             circle.style.transition = 'left 0.3s';
 
             slider.appendChild(circle);
+            checkbox.addEventListener('change', () => {
+                slider.style.backgroundColor = checkbox.checked ? '#4CAF50' : '#ccc';
+                circle.style.left = checkbox.checked ? '22px' : '2px';
+            });
 
             const labelElement = document.createElement('span');
             labelElement.textContent = label;
@@ -275,17 +284,14 @@
             switchContainer.checkbox = checkbox;
             switchContainer.switchContainer = switchContainer;
 
-            checkbox.addEventListener('change', () => {
-                slider.style.backgroundColor = checkbox.checked ? '#4CAF50' : '#ccc';
-                circle.style.left = checkbox.checked ? '22px' : '2px';
-            });
-
             return switchContainer;
         };
 
+        // Переключатель "Выбрать филиал"
         const selectBranchSwitch = createSwitch('selectBranch', 'true', 'Выбрать филиал');
-        container.appendChild(selectBranchSwitch.switchContainer);
+        container.appendChild(selectBranchSwitch);
 
+        // Переключатели регионов
         const southSwitch = createSwitch('south', filter_south, 'ПФ (Юг)');
         const volgaSwitch = createSwitch('volga', filter_volga, 'ПФ (Волга)');
         const szSwitch = createSwitch('sz', filter_sz, 'ПФ (СЗ)');
@@ -295,16 +301,64 @@
         const ufSwitch = createSwitch('uf', filter_uf, 'УФ');
         const cfSwitch = createSwitch('cf', filter_cf, 'ЦФ');
 
-        container.appendChild(volgaSwitch.switchContainer);
-        container.appendChild(southSwitch.switchContainer);
-        container.appendChild(szSwitch.switchContainer);
-        container.appendChild(skSwitch.switchContainer);
-        container.appendChild(dvfSwitch.switchContainer);
-        container.appendChild(sfSwitch.switchContainer);
-        container.appendChild(ufSwitch.switchContainer);
-        container.appendChild(cfSwitch.switchContainer);
+        container.appendChild(volgaSwitch);
+        container.appendChild(southSwitch);
+        container.appendChild(szSwitch);
+        container.appendChild(skSwitch);
+        container.appendChild(dvfSwitch);
+        container.appendChild(sfSwitch);
+        container.appendChild(ufSwitch);
+        container.appendChild(cfSwitch);
 
-        // --- Кнопка "Только незавершенные" (только на странице /processes) ---
+        // Контейнер выпадающего списка филиалов
+        const branchSelectContainer = document.createElement('div');
+        branchSelectContainer.style.display = 'none';
+        const branchSelectLabel = document.createElement('span');
+        branchSelectLabel.textContent = 'Выберите филиалы:';
+        branchSelectLabel.style.fontSize = '14px';
+        branchSelectLabel.style.color = '#333';
+        branchSelectLabel.style.marginBottom = '5px';
+        branchSelectContainer.appendChild(branchSelectLabel);
+
+        const branchSelect = document.createElement('select');
+        branchSelect.multiple = true;
+        branchSelect.size = 8;
+        branchSelect.style.width = '100%';
+        branchSelect.style.padding = '5px';
+        branchSelect.style.border = '1px solid #ccc';
+        branchSelect.style.borderRadius = '5px';
+        branchSelectContainer.appendChild(branchSelect);
+
+        container.appendChild(branchSelectContainer);
+
+        // Логика отображения/скрытия филиалов
+        selectBranchSwitch.querySelector('input').addEventListener('change', () => {
+            const isChecked = selectBranchSwitch.querySelector('input').checked;
+            if (isChecked) {
+                southSwitch.style.display = 'none';
+                volgaSwitch.style.display = 'none';
+                szSwitch.style.display = 'none';
+                skSwitch.style.display = 'none';
+                dvfSwitch.style.display = 'none';
+                sfSwitch.style.display = 'none';
+                ufSwitch.style.display = 'none';
+                cfSwitch.style.display = 'none';
+                branchSelectContainer.style.display = 'block';
+                loadBranches();
+            } else {
+                southSwitch.style.display = 'flex';
+                volgaSwitch.style.display = 'flex';
+                szSwitch.style.display = 'flex';
+                skSwitch.style.display = 'flex';
+                dvfSwitch.style.display = 'flex';
+                sfSwitch.style.display = 'flex';
+                ufSwitch.style.display = 'flex';
+                cfSwitch.style.display = 'flex';
+                branchSelectContainer.style.display = 'none';
+            }
+        });
+
+        // --- Кнопка "Только незавершенные" (только на странице задач) ---
         let uncompletedTasksSwitch = null;
         if (window.location.href.includes('/processes')) {
             uncompletedTasksSwitch = createSwitch('uncompleted', 'true', 'Только незавершенные');
@@ -345,36 +399,8 @@
         buttonContainer.appendChild(cancelButton);
         modal.appendChild(buttonContainer);
 
-        // --- Добавляем модальное окно на страницу ---
+        // Добавляем модальное окно на страницу
         document.body.appendChild(modal);
-
-        // --- Логика отображения/скрытия филиалов ---
-        selectBranchSwitch.querySelector('input').addEventListener('change', () => {
-            const isChecked = selectBranchSwitch.querySelector('input').checked;
-            if (isChecked) {
-                southSwitch.style.display = 'none';
-                volgaSwitch.style.display = 'none';
-                szSwitch.style.display = 'none';
-                skSwitch.style.display = 'none';
-                dvfSwitch.style.display = 'none';
-                sfSwitch.style.display = 'none';
-                ufSwitch.style.display = 'none';
-                cfSwitch.style.display = 'none';
-                branchSelectContainer.style.display = 'block';
-                loadBranches();
-            } else {
-                southSwitch.style.display = 'flex';
-                volgaSwitch.style.display = 'flex';
-                szSwitch.style.display = 'flex';
-                skSwitch.style.display = 'flex';
-                dvfSwitch.style.display = 'flex';
-                sfSwitch.style.display = 'flex';
-                ufSwitch.style.display = 'flex';
-                cfSwitch.style.display = 'flex';
-                branchSelectContainer.style.display = 'none';
-            }
-            updateConfirmButtonState(); // Обновляем состояние кнопки "Подтвердить"
-        });
 
         // --- Обработчики событий для обновления состояния кнопки "Подтвердить" ---
         function updateConfirmButtonState() {
@@ -419,7 +445,7 @@
                 if (cfSwitch.querySelector('input').checked) selectedFilters.push(cfSwitch.querySelector('input').value);
             }
 
-            const uncompletedTasks = uncompletedTasksSwitch && uncompletedTasksSwitch.querySelector('input').checked || false;
+            const uncompletedTasks = uncompletedTasksSwitch?.querySelector('input').checked || false;
             console.log(`🔍 Выбран фильтр "Только незавершенные": ${uncompletedTasks}`);
             document.body.removeChild(modal);
             extractData(uncompletedTasks);
@@ -430,19 +456,9 @@
             document.body.removeChild(modal);
         });
     }
-        // --- Контейнер для кнопок ---
-        const buttonContainer = document.createElement('div');
-        buttonContainer.style.display = 'flex';
-        buttonContainer.style.justifyContent = 'space-between';
-        buttonContainer.appendChild(confirmButton);
-        buttonContainer.appendChild(cancelButton);
-        modal.appendChild(buttonContainer);
 
-        // Добавляем модальное окно на страницу
-        document.body.appendChild(modal);
-    }
-
-        function extractData(uncompletedTasks) {
+    // Функция для извлечения данных в зависимости от URL
+    function extractData(uncompletedTasks) {
         if (window.location.href.includes('/projects')) {
             extractProjectData();
         } else if (window.location.href.includes('/processes')) {
@@ -452,6 +468,7 @@
         }
     }
 
+    // Функция для получения количества проектов
     async function extractProjectData() {
         if (!axios) {
             console.error('❌ Axios не загружен');
@@ -480,6 +497,7 @@
         }
     }
 
+    // Функция для получения количества задач
     async function extractTaskData(uncompletedTasks) {
         if (!axios) {
             console.error('❌ Axios не загружен');
@@ -508,6 +526,7 @@
         }
     }
 
+    // Функция для получения всех проектов
     async function fetchProjects(totalItems) {
         const token = findToken();
         if (!token) return console.error('❌ Токен не найден');
@@ -536,6 +555,7 @@
         }
     }
 
+    // Функция для получения всех задач
     async function fetchTasks(totalItems, uncompletedTasks) {
         const token = findToken();
         if (!token) return console.error('❌ Токен не найден');
@@ -564,6 +584,7 @@
         }
     }
 
+    // Функция для создания таблицы из данных
     function createTableFromData(data, type) {
         const table = document.createElement('table');
         table.setAttribute('cellspacing', '0');
@@ -659,7 +680,7 @@
                             const lat = coords[0];
                             const lng = coords[1];
                             const link = document.createElement('a');
-                            link.href = `https://yandex.ru/maps/?pt=${lng},${lat}&z=16&l=skl`;
+                            link.href = `https://yandex.ru/maps/?pt=${lat},${lng}&z=16&l=skl`;
                             link.textContent = `${lat}, ${lng}`;
                             span.appendChild(link);
                         } else {
@@ -724,12 +745,12 @@
         return table.outerHTML;
     }
 
+    // Функция для обработки таблицы перед копированием
     function processTable(tableHTML, type) {
         const parser = new DOMParser();
         const doc = parser.parseFromString(tableHTML, 'text/html');
         const table = doc.querySelector('table');
 
-        // Удаление лишних столбцов
         const rows = table.querySelectorAll('tr');
         rows.forEach(row => {
             const cells = row.querySelectorAll('td');
@@ -740,7 +761,6 @@
             }
         });
 
-        // Переименование заголовков
         const headerRow = table.querySelector('tr');
         const headerCells = headerRow.querySelectorAll('td');
 
@@ -800,6 +820,7 @@
         return table.outerHTML;
     }
 
+    // Функция для копирования текста в буфер обмена
     function copyToClipboard(text) {
         navigator.clipboard.writeText(text).then(() => {
             console.log('📋 Текст скопирован в буфер обмена');
@@ -808,6 +829,7 @@
         });
     }
 
+    // Функция для загрузки списка филиалов через API
     async function loadBranches() {
         const token = findToken();
         if (!token) {
