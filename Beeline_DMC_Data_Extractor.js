@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Beeline DMC Data Extractor + AutoUpdater
 // @namespace    http://tampermonkey.net/
-// @version      7.2.4
+// @version      7.2.5
 // @description  Извлечение данных из Beeline DMC с возможностью автообновления и уведомлением о последнем коммите
 // @author       zOnVolga
 // @match        https://dmc.beeline.ru/*
@@ -363,24 +363,13 @@ function showModal() {
         let uncompletedTasksSwitch = null;
         if (window.location.href.includes('/processes')) {
             uncompletedTasksSwitch = createSwitch('uncompleted', 'true', 'Только незавершенные');
-            container.appendChild(uncompletedTasksSwitch.switchContainer);
+            container.appendChild(uncompletedTasksSwitch);
         }
 
         // --- Кнопки "Подтвердить" и "Отмена" ---
-        const confirmButton = document.createElement('button');
-        confirmButton.textContent = 'Подтвердить';
-        confirmButton.style.padding = '10px 20px';
-        confirmButton.style.backgroundColor = '#4CAF50';
-        confirmButton.style.color = 'white';
-        confirmButton.style.border = 'none';
-        confirmButton.style.borderRadius = '5px';
-        confirmButton.style.cursor = 'pointer';
-        confirmButton.style.fontSize = '16px';
-        confirmButton.style.marginTop = '20px';
         confirmButton.addEventListener('click', () => {
             selectedFilters = [];
-
-            if (selectBranchSwitch.checkbox.checked) {
+            if (selectBranchSwitch.querySelector('input').checked) {
                 const selectedBranches = Array.from(branchSelect.selectedOptions).map(option => option.value);
                 if (selectedBranches.length > 0) {
                     selectedFilters.push(selectedBranches.join(','));
@@ -389,17 +378,17 @@ function showModal() {
                     return;
                 }
             } else {
-                if (southSwitch.checkbox.checked) selectedFilters.push(southSwitch.checkbox.value);
-                if (volgaSwitch.checkbox.checked) selectedFilters.push(volgaSwitch.checkbox.value);
-                if (szSwitch.checkbox.checked) selectedFilters.push(szSwitch.checkbox.value);
-                if (skSwitch.checkbox.checked) selectedFilters.push(skSwitch.checkbox.value);
-                if (dvfSwitch.checkbox.checked) selectedFilters.push(dvfSwitch.checkbox.value);
-                if (sfSwitch.checkbox.checked) selectedFilters.push(sfSwitch.checkbox.value);
-                if (ufSwitch.checkbox.checked) selectedFilters.push(ufSwitch.checkbox.value);
-                if (cfSwitch.checkbox.checked) selectedFilters.push(cfSwitch.checkbox.value);
+                if (southSwitch.querySelector('input').checked) selectedFilters.push(southSwitch.querySelector('input').value);
+                if (volgaSwitch.querySelector('input').checked) selectedFilters.push(volgaSwitch.querySelector('input').value);
+                if (szSwitch.querySelector('input').checked) selectedFilters.push(szSwitch.querySelector('input').value);
+                if (skSwitch.querySelector('input').checked) selectedFilters.push(skSwitch.querySelector('input').value);
+                if (dvfSwitch.querySelector('input').checked) selectedFilters.push(dvfSwitch.querySelector('input').value);
+                if (sfSwitch.querySelector('input').checked) selectedFilters.push(sfSwitch.querySelector('input').value);
+                if (ufSwitch.querySelector('input').checked) selectedFilters.push(ufSwitch.querySelector('input').value);
+                if (cfSwitch.querySelector('input').checked) selectedFilters.push(cfSwitch.querySelector('input').value);
             }
-
-            const uncompletedTasks = uncompletedTasksSwitch?.checkbox.checked || false;
+        
+            const uncompletedTasks = uncompletedTasksSwitch && uncompletedTasksSwitch.querySelector('input').checked || false;
             console.log(`🔍 Выбран фильтр "Только незавершенные": ${uncompletedTasks}`);
             document.body.removeChild(modal);
             extractData(uncompletedTasks);
