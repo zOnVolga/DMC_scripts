@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Beeline DMC Data Extractor + AutoUpdater
 // @namespace    http://tampermonkey.net/
-// @version      7.1.9
+// @version      7.2.0
 // @description  Извлечение данных из Beeline DMC с возможностью автообновления и уведомлением о последнем коммите
 // @author       zOnVolga
 // @match        https://dmc.beeline.ru/*
@@ -224,7 +224,7 @@
         modal.style.backgroundColor = '#fff';
         modal.style.padding = '20px';
         modal.style.borderRadius = '10px';
-        modal.style.boxShadow = '0 4px 6px rgba(0,0,0,0.1)';
+        modal.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
         modal.style.zIndex = '10000';
         modal.style.width = '300px';
         modal.style.textAlign = 'center';
@@ -239,7 +239,10 @@
         container.style.gap = '10px';
         modal.appendChild(container);
 
-        // --- Создание переключателей ---
+        let selectedFilters = [];
+        let uncompletedTasksSwitch = null;
+
+        // Функция создания переключателя
         function createSwitch(id, value, label, isChecked = false) {
             const switchContainer = document.createElement('label');
             switchContainer.style.display = 'flex';
@@ -290,10 +293,9 @@
             return { switchContainer, checkbox };
         }
 
-        const selectedFilters = [];
+        // Выпадающий список филиалов
         const branchSelectContainer = document.createElement('div');
         branchSelectContainer.style.display = 'none';
-
         const branchSelectLabel = document.createElement('span');
         branchSelectLabel.textContent = 'Выберите филиалы:';
         branchSelectLabel.style.fontSize = '14px';
@@ -315,7 +317,7 @@
         const selectBranchSwitch = createSwitch('selectBranch', 'true', 'Выбрать филиал');
         container.appendChild(selectBranchSwitch.switchContainer);
 
-        // Регионы
+        // Переключатели регионов
         const southSwitch = createSwitch('south', filter_south, 'ПФ (Юг)');
         const volgaSwitch = createSwitch('volga', filter_volga, 'ПФ (Волга)');
         const szSwitch = createSwitch('sz', filter_sz, 'ПФ (СЗ)');
@@ -325,8 +327,8 @@
         const ufSwitch = createSwitch('uf', filter_uf, 'УФ');
         const cfSwitch = createSwitch('cf', filter_cf, 'ЦФ');
 
-        container.appendChild(volgaSwitch.switchContainer);
         container.appendChild(southSwitch.switchContainer);
+        container.appendChild(volgaSwitch.switchContainer);
         container.appendChild(szSwitch.switchContainer);
         container.appendChild(skSwitch.switchContainer);
         container.appendChild(dvfSwitch.switchContainer);
@@ -334,7 +336,69 @@
         container.appendChild(ufSwitch.switchContainer);
         container.appendChild(cfSwitch.switchContainer);
 
-        // Кнопка "Подтвердить"
+        // Переменные для выпадающего списка филиалов
+        let branchSelect;
+        let branchSelectLabel;
+
+        // Логика отображения/скрытия филиалов
+        selectBranchSwitch.checkbox.addEventListener('change', () => {
+            if (selectBranchSwitch.checkbox.checked) {
+                southSwitch.switchContainer.style.display = 'none';
+                volgaSwitch.switchContainer.style.display = 'none';
+                szSwitch.switchContainer.style.display = 'none';
+                skSwitch.switchContainer.style.display = 'none';
+                dvfSwitch.switchContainer.style.display = 'none';
+                sfSwitch.switchContainer.style.display = 'none';
+                ufSwitch.switchContainer.style.display = 'none';
+                cfSwitch.switchContainer.style.display = 'none';
+
+                // Создаем элементы выпадающего списка (если ещё не созданы)
+                if (!branchSelect) {
+                    branchSelect = document.createElement('select');
+                    branchSelect.multiple = true;
+                    branchSelect.size = 8;
+                    branchSelect.style.width = '100%';
+                    branchSelect.style.padding = '5px';
+                    branchSelect.style.border = '1px solid #ccc';
+                    branchSelect.style.borderRadius = '5px';
+
+                    branchSelectLabel = document.createElement('span');
+                    branchSelectLabel.textContent = 'Выберите филиалы:';
+                    branchSelectLabel.style.fontSize = '14px';
+                    branchSelectLabel.style.color = '#333';
+                    branchSelectLabel.style.marginBottom = '5px';
+
+                    branchSelectContainer.innerHTML = '';
+                    branchSelectContainer.appendChild(branchSelectLabel);
+                    branchSelectContainer.appendChild(branchSelect);
+                }
+
+                branchSelectContainer.style.display = 'block';
+                loadBranches();
+            } else {
+                southSwitch.switchContainer.style.display = 'flex';
+                volgaSwitch.switchContainer.style.display = 'flex';
+                szSwitch.switchContainer.style.display = 'flex';
+                skSwitch.switchContainer.style.display = 'flex';
+                dvfSwitch.switchContainer.style.display = 'flex';
+                sfSwitch.switchContainer.style.display = 'flex';
+                ufSwitch.switchContainer.style.display = 'flex';
+                cfSwitch.switchContainer.style.display = 'flex';
+                branchSelectContainer.style.display = 'none';
+            }
+        });
+
+        // Добавляем контейнер в DOM после создания всех элементов
+        container.appendChild(branchSelectContainer);
+
+        // --- Кнопка "Только незавершенные" (только на странице задач) ---
+        let uncompletedTasksSwitch = null;
+        if (window.location.href.includes('/processes')) {
+            uncompletedTasksSwitch = createSwitch('uncompleted', 'true', 'Только незавершенные');
+            container.appendChild(uncompletedTasksSwitch.switchContainer);
+        }
+
+        // --- Кнопки "Подтвердить" и "Отмена" ---
         const confirmButton = document.createElement('button');
         confirmButton.textContent = 'Подтвердить';
         confirmButton.style.padding = '10px 20px';
@@ -347,6 +411,7 @@
         confirmButton.style.marginTop = '20px';
         confirmButton.addEventListener('click', () => {
             selectedFilters = [];
+
             if (selectBranchSwitch.checkbox.checked) {
                 const selectedBranches = Array.from(branchSelect.selectedOptions).map(option => option.value);
                 if (selectedBranches.length > 0) {
@@ -372,7 +437,7 @@
             extractData(uncompletedTasks);
         });
 
-        // Кнопка "Отмена"
+        // --- Кнопка "Отмена" ---
         const cancelButton = document.createElement('button');
         cancelButton.textContent = 'Отмена';
         cancelButton.style.padding = '10px 20px';
@@ -388,7 +453,7 @@
             document.body.removeChild(modal);
         });
 
-        // Контейнер для кнопок
+        // --- Контейнер для кнопок ---
         const buttonContainer = document.createElement('div');
         buttonContainer.style.display = 'flex';
         buttonContainer.style.justifyContent = 'space-between';
@@ -397,32 +462,6 @@
 
         modal.appendChild(buttonContainer);
         document.body.appendChild(modal);
-
-        // Логика отображения/скрытия филиалов
-        selectBranchSwitch.checkbox.addEventListener('change', () => {
-            if (selectBranchSwitch.checkbox.checked) {
-                southSwitch.switchContainer.style.display = 'none';
-                volgaSwitch.switchContainer.style.display = 'none';
-                szSwitch.switchContainer.style.display = 'none';
-                skSwitch.switchContainer.style.display = 'none';
-                dvfSwitch.switchContainer.style.display = 'none';
-                sfSwitch.switchContainer.style.display = 'none';
-                ufSwitch.switchContainer.style.display = 'none';
-                cfSwitch.switchContainer.style.display = 'none';
-                branchSelectContainer.style.display = 'block';
-                loadBranches();
-            } else {
-                southSwitch.switchContainer.style.display = 'flex';
-                volgaSwitch.switchContainer.style.display = 'flex';
-                szSwitch.switchContainer.style.display = 'flex';
-                skSwitch.switchContainer.style.display = 'flex';
-                dvfSwitch.switchContainer.style.display = 'flex';
-                sfSwitch.switchContainer.style.display = 'flex';
-                ufSwitch.switchContainer.style.display = 'flex';
-                cfSwitch.switchContainer.style.display = 'flex';
-                branchSelectContainer.style.display = 'none';
-            }
-        });
     }
 
     // Функция для извлечения данных в зависимости от URL
@@ -502,6 +541,7 @@
         try {
             const response = await axios.get(url, { headers: { 'Authorization': `Bearer ${token}` } });
             const data = response.data.results;
+
             if (data && data.length > 0) {
                 console.log(`✅ Данные о проектах получены (${data.length} записей)`);
                 const tableHTML = createTableFromData(data, 'project');
@@ -528,6 +568,7 @@
         try {
             const response = await axios.get(url, { headers: { 'Authorization': `Bearer ${token}` } });
             const data = response.data.results;
+
             if (data && data.length > 0) {
                 console.log(`✅ Данные о задачах получены (${data.length} записей)`);
                 const tableHTML = createTableFromData(data, 'task');
@@ -745,6 +786,7 @@
         // Переименование заголовков
         const headerRow = table.querySelector('tr');
         const headerCells = headerRow.querySelectorAll('td');
+
         const newHeaders = type === 'project' ? [
             'Регион',
             'Филиал',
