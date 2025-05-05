@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Beeline DMC Data Extractor + AutoUpdater
 // @namespace    http://tampermonkey.net/
-// @version      7.2.8
+// @version      7.2.9
 // @description  Извлечение данных из Beeline DMC с возможностью автообновления и уведомлением о последнем коммите
 // @author       zOnVolga
 // @match        https://dmc.beeline.ru/*
@@ -325,7 +325,7 @@
         branchSelectLabel.style.marginBottom = '5px';
         branchSelectContainer.appendChild(branchSelectLabel);
 
-        const branchSelect = document.createElement('select');
+        branchSelect = document.createElement('select'); // без const/let
         branchSelect.multiple = true;
         branchSelect.size = 8;
         branchSelect.style.width = '100%';
