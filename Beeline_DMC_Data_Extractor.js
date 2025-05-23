@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Beeline DMC Data Extractor + AutoUpdater
 // @namespace    http://tampermonkey.net/
-// @version      7.3.1
+// @version      7.3.2
 // @description  Извлечение данных из Beeline DMC с возможностью автообновления и уведомлением о последнем коммите
 // @author       zOnVolga
 // @match        https://dmc.beeline.ru/*
@@ -681,7 +681,7 @@ function createTableFromData(data, type) {
                 if (header === 'id') {
                     const link = document.createElement('a');
                     link.href = `https://dmc.beeline.ru/projects/${item.id}`;
-                    link.textContent = ">>>>"; //item.id;
+                    link.textContent = ' 🔗 '; //item.id;
                     span.appendChild(link);
                 } else if (header === 'geo') {
                     const match = item[header]?.match(/\(([^)]+)\)/);
@@ -714,7 +714,7 @@ function createTableFromData(data, type) {
                             const url = `https://yandex.ru/maps/?rtext=${deliveryCoords[0]},${deliveryCoords[1]}~${projectCoords}&mode=routes&routes%5Bavoid%5D=tolls%2Cunpaved%2Cpoor_condition&rtm=atm&rtt=auto&ruri=~`;
                             const link = document.createElement('a');
                             link.href = url;
-                            link.textContent = 'Доставка ->>>';
+                            link.textContent = '🔗 🚛 '//'Доставка ->>>';
                             link.target = '_blank';
                             span.appendChild(link);
                         } else {
@@ -726,7 +726,7 @@ function createTableFromData(data, type) {
                             const url = `https://yandex.ru/maps/?rtext=${surveyCoords[0]},${surveyCoords[1]}~${projectCoords}&mode=routes&routes%5Bavoid%5D=tolls%2Cunpaved%2Cpoor_condition&rtm=atm&rtt=auto&ruri=~`;
                             const link = document.createElement('a');
                             link.href = url;
-                            link.textContent = 'Обследование ->>>';
+                            link.textContent = '🔗 🔍 '//'Обследование ->>>';
                             link.target = '_blank';
                             span.appendChild(link);
                         } else {
