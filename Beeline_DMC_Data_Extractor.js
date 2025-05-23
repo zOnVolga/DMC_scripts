@@ -681,7 +681,7 @@ function createTableFromData(data, type) {
                 if (header === 'id') {
                     const link = document.createElement('a');
                     link.href = `https://dmc.beeline.ru/projects/${item.id}`;
-                    link.textContent = item.id;
+                    link.textContent = ">>>>"; //item.id;
                     span.appendChild(link);
                 } else if (header === 'geo') {
                     const match = item[header]?.match(/\(([^)]+)\)/);
