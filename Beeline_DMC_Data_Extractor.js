@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Beeline DMC Data Extractor + AutoUpdater
 // @namespace    http://tampermonkey.net/
-// @version      7.2.9
+// @version      7.3.0
 // @description  Извлечение данных из Beeline DMC с возможностью автообновления и уведомлением о последнем коммите
 // @author       zOnVolga
 // @match        https://dmc.beeline.ru/*
@@ -590,165 +590,170 @@
     }
 
     // Функция для создания таблицы из данных
-    function createTableFromData(data, type) {
-        const table = document.createElement('table');
-        table.setAttribute('cellspacing', '0');
-        table.setAttribute('class', 'style__TableStyled-sc-1c82g3t-0 cobzxA');
+function createTableFromData(data, type) {
+    const table = document.createElement('table');
+    table.setAttribute('cellspacing', '0');
+    table.setAttribute('class', 'style__TableStyled-sc-1c82g3t-0 cobzxA');
 
-        let headers = [];
+    let headers = [];
 
-        if (type === 'project') {
-            headers = [
-                'region',
-                'branch',
-                'project_ext_id',
-                'id',
-                'bs_number',
-                'bs_name',
-                'address',
-                'types_project',
-                'types_places_hardware',
-                'places_hardware',
-                'places_antenna',
-                'capex',
-                'hight_object',
-                'open_date',
-                'years',
-                'bs_gfk',
-                'rru_gfk',
-                'geo',
-                'route_LL',
-                'route_PPO',
-                'statuses_project',
-                'pos_code',
-                'prime_contractors',
-                'comment'
-            ];
-        } else if (type === 'task') {
-            headers = [
-                'name',
-                'number',
-                'replay',
-                'object_number',
-                'object_name',
-                'object_status_name',
-                'created_at',
-                'user_position',
-                'user_short_name',
-                'project_number',
-                'bs_number',
-                'bs_name',
-                'bs_address',
-                'project_type',
-                'gfk',
-                'branch',
-                'region',
-                'status'
-            ];
-        }
+    if (type === 'project') {
+        headers = [
+            'region',
+            'branch',
+            'project_ext_id',
+            'id',
+            'bs_number',
+            'bs_name',
+            'address',
+            'types_project',
+            'types_places_hardware',
+            'places_hardware',
+            'places_antenna',
+            'capex',
+            'hight_object',
+            'open_date',
+            'years',
+            'bs_gfk',
+            'rru_gfk',
+            'geo',
+            'route_LL',
+            'route_PPO',
+            'statuses_project',
+            'pos_code',
+            'prime_contractors',
+            'comment'
+        ];
+    } else if (type === 'task') {
+        headers = [
+            'name',
+            'number',
+            'replay',
+            'object_number',
+            'object_name',
+            'object_status_name',
+            'created_at',
+            'user_position',
+            'user_short_name',
+            'project_number',
+            'bs_number',
+            'bs_name',
+            'bs_address',
+            'project_type',
+            'gfk',
+            'branch',
+            'region',
+            'status'
+        ];
+    }
 
-        const headerRow = document.createElement('tr');
-        headerRow.setAttribute('class', 'style__TableStringStyled-sc-1c82g3t-1 hwrWAV');
+    const headerRow = document.createElement('tr');
+    headerRow.setAttribute('class', 'style__TableStringStyled-sc-1c82g3t-1 hwrWAV');
+
+    headers.forEach(header => {
+        const th = document.createElement('td');
+        th.setAttribute('width', 'calc(110 / 1900 * 100%)');
+        th.setAttribute('class', 'style__TableCellStyled-sc-1c82g3t-3 euagwJ');
+        const div = document.createElement('div');
+        div.setAttribute('class', 'style__TableHeadStyled-sc-1c82g3t-4 cjYqEH');
+        const span = document.createElement('span');
+        span.setAttribute('class', 'dsb_typography dsb_typography__subtitle3');
+        span.textContent = header;
+        div.appendChild(span);
+        th.appendChild(div);
+        headerRow.appendChild(th);
+    });
+
+    table.appendChild(headerRow);
+
+    data.forEach(item => {
+        const row = document.createElement('tr');
+        row.setAttribute('class', 'style__TableStringStyled-sc-1c82g3t-1 hwrWAV style__ProjectString-sc-hfirfp-1 hNFYXu');
 
         headers.forEach(header => {
-            const th = document.createElement('td');
-            th.setAttribute('width', 'calc(110 / 1900 * 100%)');
-            th.setAttribute('class', 'style__TableCellStyled-sc-1c82g3t-3 euagwJ');
+            const td = document.createElement('td');
+            td.setAttribute('class', 'style__TableCellStyled-sc-1c82g3t-3 lguZrP');
             const div = document.createElement('div');
-            div.setAttribute('class', 'style__TableHeadStyled-sc-1c82g3t-4 cjYqEH');
+            div.setAttribute('class', 'style__TableCellContentStyled-sc-1c82g3t-5 ePYmXN');
             const span = document.createElement('span');
-            span.setAttribute('class', 'dsb_typography dsb_typography__subtitle3');
-            span.textContent = header;
-            div.appendChild(span);
-            th.appendChild(div);
-            headerRow.appendChild(th);
-        });
 
-        table.appendChild(headerRow);
-
-        data.forEach(item => {
-            const row = document.createElement('tr');
-            row.setAttribute('class', 'style__TableStringStyled-sc-1c82g3t-1 hwrWAV style__ProjectString-sc-hfirfp-1 hNFYXu');
-
-            headers.forEach(header => {
-                const td = document.createElement('td');
-                td.setAttribute('class', 'style__TableCellStyled-sc-1c82g3t-3 lguZrP');
-                const div = document.createElement('div');
-                div.setAttribute('class', 'style__TableCellContentStyled-sc-1c82g3t-5 ePYmXN');
-                const span = document.createElement('span');
-
-                if (type === 'project') {
-                    if (header === 'geo') {
-                        const match = item[header]?.match(/\(([^)]+)\)/);
-                        if (match) {
-                            const coords = match[1].split(' ');
-                            const lat = coords[0];
-                            const lng = coords[1];
-                            const link = document.createElement('a');
-                            link.href = `https://yandex.ru/maps/?pt=${lat},${lng}&z=16&l=skl`;
-                            link.textContent = `${lat}, ${lng}`;
-                            span.appendChild(link);
-                        } else {
-                            span.textContent = item[header] || '';
-                        }
-                    } else if (header === 'route_LL' || header === 'route_PPO') {
-                        const branchName = item.branch;
-                        const branchCoords = branchCoordinates[branchName];
-                        const geoMatch = item.geo?.match(/\(([^)]+)\)/);
-                        let projectCoords = '';
-                        if (geoMatch) {
-                            const coords = geoMatch[1].split(' ');
-                            const lat = coords[0];
-                            const lng = coords[1];
-                            projectCoords = `${lng},${lat}`;
-                        }
-
-                        if (header === 'route_LL') {
-                            if (branchCoords && branchCoords.delivery && projectCoords) {
-                                const deliveryCoords = branchCoords.delivery.split(',').map(c => c.trim());
-                                const url = `https://yandex.ru/maps/?rtext=${deliveryCoords[0]},${deliveryCoords[1]}~${projectCoords}&mode=routes&routes%5Bavoid%5D=tolls%2Cunpaved%2Cpoor_condition&rtm=atm&rtt=auto&ruri=~`;
-                                const link = document.createElement('a');
-                                link.href = url;
-                                link.textContent = 'Доставка ->>>';
-                                link.target = '_blank';
-                                span.appendChild(link);
-                            } else {
-                                span.textContent = '';
-                            }
-                        } else if (header === 'route_PPO') {
-                            if (branchCoords && branchCoords.survey && projectCoords) {
-                                const surveyCoords = branchCoords.survey.split(',').map(c => c.trim());
-                                const url = `https://yandex.ru/maps/?rtext=${surveyCoords[0]},${surveyCoords[1]}~${projectCoords}&mode=routes&routes%5Bavoid%5D=tolls%2Cunpaved%2Cpoor_condition&rtm=atm&rtt=auto&ruri=~`;
-                                const link = document.createElement('a');
-                                link.href = url;
-                                link.textContent = 'Обследование ->>>';
-                                link.target = '_blank';
-                                span.appendChild(link);
-                            } else {
-                                span.textContent = '';
-                            }
-                        } else {
-                            span.textContent = item[header] || '';
-                        }
-                    } else if (header === 'hight_object') {
-                        span.textContent = item[header] ? item[header].toString().replace('.', ',') : '';
+            if (type === 'project') {
+                if (header === 'id') {
+                    const link = document.createElement('a');
+                    link.href = `https://dmc.beeline.ru/projects/${item.id}`;
+                    link.textContent = item.id;
+                    span.appendChild(link);
+                } else if (header === 'geo') {
+                    const match = item[header]?.match(/\(([^)]+)\)/);
+                    if (match) {
+                        const coords = match[1].split(' ');
+                        const lat = coords[0];
+                        const lng = coords[1];
+                        const link = document.createElement('a');
+                        link.href = `https://yandex.ru/maps/?pt=${lat},${lng}&z=16&l=skl`;
+                        link.textContent = `${lat}, ${lng}`;
+                        span.appendChild(link);
                     } else {
                         span.textContent = item[header] || '';
                     }
+                } else if (header === 'route_LL' || header === 'route_PPO') {
+                    const branchName = item.branch;
+                    const branchCoords = branchCoordinates[branchName];
+                    const geoMatch = item.geo?.match(/\(([^)]+)\)/);
+                    let projectCoords = '';
+                    if (geoMatch) {
+                        const coords = geoMatch[1].split(' ');
+                        const lat = coords[0];
+                        const lng = coords[1];
+                        projectCoords = `${lng},${lat}`;
+                    }
+
+                    if (header === 'route_LL') {
+                        if (branchCoords && branchCoords.delivery && projectCoords) {
+                            const deliveryCoords = branchCoords.delivery.split(',').map(c => c.trim());
+                            const url = `https://yandex.ru/maps/?rtext=${deliveryCoords[0]},${deliveryCoords[1]}~${projectCoords}&mode=routes&routes%5Bavoid%5D=tolls%2Cunpaved%2Cpoor_condition&rtm=atm&rtt=auto&ruri=~`;
+                            const link = document.createElement('a');
+                            link.href = url;
+                            link.textContent = 'Доставка ->>>';
+                            link.target = '_blank';
+                            span.appendChild(link);
+                        } else {
+                            span.textContent = '';
+                        }
+                    } else if (header === 'route_PPO') {
+                        if (branchCoords && branchCoords.survey && projectCoords) {
+                            const surveyCoords = branchCoords.survey.split(',').map(c => c.trim());
+                            const url = `https://yandex.ru/maps/?rtext=${surveyCoords[0]},${surveyCoords[1]}~${projectCoords}&mode=routes&routes%5Bavoid%5D=tolls%2Cunpaved%2Cpoor_condition&rtm=atm&rtt=auto&ruri=~`;
+                            const link = document.createElement('a');
+                            link.href = url;
+                            link.textContent = 'Обследование ->>>';
+                            link.target = '_blank';
+                            span.appendChild(link);
+                        } else {
+                            span.textContent = '';
+                        }
+                    } else {
+                        span.textContent = item[header] || '';
+                    }
+                } else if (header === 'hight_object') {
+                    span.textContent = item[header] ? item[header].toString().replace('.', ',') : '';
                 } else {
                     span.textContent = item[header] || '';
                 }
+            } else {
+                span.textContent = item[header] || '';
+            }
 
-                div.appendChild(span);
-                td.appendChild(div);
-                row.appendChild(td);
-            });
-
-            table.appendChild(row);
+            div.appendChild(span);
+            td.appendChild(div);
+            row.appendChild(td);
         });
 
-        return table.outerHTML;
-    }
+        table.appendChild(row);
+    });
+
+    return table.outerHTML;
+}
 
     // Функция для обработки таблицы перед копированием
     function processTable(tableHTML, type) {
