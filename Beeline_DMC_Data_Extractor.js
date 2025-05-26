@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Beeline DMC Extractor (v.7.3.3 | 2025-05-26)
+// @name         Beeline DMC Extractor (v.7.4.0 | 2025-05-26)
 // @namespace    http://tampermonkey.net/
-// @version      7.3.3
+// @version      7.4.0
 // @description  Извлечение данных из Beeline DMC с возможностью автообновления и уведомлением о последнем коммите
 // @author       zOnVolga
 // @match        https://dmc.beeline.ru/*
@@ -173,6 +173,80 @@
         "Грозненский": { delivery: "45.060946,41.999728", survey: "43.3180,45.6982" },
         "Сочинский": { delivery: "47.338143,39.730760", survey: "43.5855,39.7231" }
     };
+
+
+    // === Вывод баннера на страницу (многоуровневый стек) ===
+    function showBanner(message, type = 'info') {
+        const containerId = 'automation-banner-container';
+        let container = document.getElementById(containerId);
+
+        // Создаём контейнер, если его нет
+        if (!container) {
+            container = document.createElement('div');
+            container.id = containerId;
+            container.style.position = 'fixed';
+            container.style.top = '10px';
+            container.style.right = '10px';
+            container.style.zIndex = '99999';
+            container.style.display = 'flex';
+            container.style.flexDirection = 'column-reverse';
+            container.style.gap = '8px';
+            container.style.maxWidth = '90%';
+            container.style.listStyle = 'none';
+            container.style.padding = '0';
+            container.style.margin = '0';
+            document.body.appendChild(container);
+        }
+
+        // Создаём сам баннер
+        const banner = document.createElement('div');
+        banner.style.background = '#fff3cd';
+        banner.style.color = '#856404';
+        banner.style.borderLeft = '4px solid #856404';
+        banner.style.padding = '10px 15px';
+        banner.style.borderRadius = '4px';
+        banner.style.boxShadow = '0 2px 6px rgba(0,0,0,0.1)';
+        banner.style.fontFamily = 'Arial, sans-serif';
+        banner.style.fontSize = '14px';
+        banner.style.opacity = '1';
+        banner.style.transition = 'opacity 0.5s ease-out';
+        banner.style.boxSizing = 'border-box';
+        banner.style.width = 'max-content';
+        banner.style.maxWidth = '100%';
+        banner.style.wordBreak = 'break-word';
+
+        // === Цвета в зависимости от типа ===
+        switch (type) {
+            case 'error':
+                banner.style.background = '#f8d7da';
+                banner.style.color = '#721c24';
+                banner.style.borderLeftColor = '#721c24';
+                banner.textContent = message
+                break;
+            case 'success':
+                banner.style.background = '#d4edda';
+                banner.style.color = '#155724';
+                banner.style.borderLeftColor = '#155724';
+                banner.textContent = message;
+                break;
+            default:
+                banner.textContent = message;
+                break;
+        }
+
+        // Вставляем баннер сверху
+        container.insertBefore(banner, container.firstChild);
+
+        // Автоматическое исчезновение через 10 секунд
+        setTimeout(() => {
+            banner.style.opacity = '0';
+            setTimeout(() => {
+                if (banner.parentElement === container) {
+                    banner.remove();
+                }
+            }, 500);
+        }, 10000);
+    }
 
     // Проверка токена
     function isToken(value) {
@@ -460,6 +534,7 @@
 
             const uncompletedTasks = uncompletedTasksSwitch?.querySelector('input').checked || false;
             console.log(`🔍 Выбран фильтр "Только незавершенные": ${uncompletedTasks}`);
+            showBanner(`🔍 Выбран фильтр "Только незавершенные": ${uncompletedTasks}`, 'info')
             document.body.removeChild(modal);
             extractData(uncompletedTasks);
         });
@@ -495,6 +570,7 @@
 
         if (!token) {
             console.error('❌ Токен не найден');
+            showBanner('❌ Токен не найден', 'error');
             alert('Токен не найден');
             return;
         }
@@ -503,9 +579,11 @@
             const response = await axios.get(url, { headers: { 'Authorization': `Bearer ${token}` } });
             const totalItems = response.data.count;
             console.log(`🔍 Найдено ${totalItems} проектов`);
+            showBanner(`🔍 Найдено ${totalItems} проектов`, 'info');
             fetchProjects(totalItems);
         } catch (error) {
             console.error('❌ Ошибка при получении количества проектов:', error);
+            showBanner('❌ Ошибка при получении количества проектов:', 'error');
             alert('Не удалось получить количество проектов');
         }
     }
@@ -524,6 +602,7 @@
 
         if (!token) {
             console.error('❌ Токен не найден');
+            showBannerconsole.error('❌ Токен не найден', 'error');
             alert('Токен не найден');
             return;
         }
@@ -532,9 +611,11 @@
             const response = await axios.get(url, { headers: { 'Authorization': `Bearer ${token}` } });
             const totalItems = response.data.count;
             console.log(`🔍 Найдено ${totalItems} задач (${uncompletedTasks ? 'только незавершенные' : 'все'})`);
+            showBanner(`🔍 Найдено ${totalItems} задач (${uncompletedTasks ? 'только незавершенные' : 'все'})`, 'info');
             fetchTasks(totalItems, uncompletedTasks);
         } catch (error) {
             console.error('❌ Ошибка при получении количества задач:', error);
+            showBanner('❌ Ошибка при получении количества задач:', 'error');
             alert('Не удалось получить количество задач');
         }
     }
@@ -548,6 +629,7 @@
         const url = `https://dmc.beeline.ru/api/projects/projects/?page=1&page_size=${totalItems}&branch=${filter_branch}`;
 
         console.log(`🚀 Запрашиваем проекты: ${url}`);
+        showBanner(`🚀 Запрашиваем проекты`, 'info');
 
         try {
             const response = await axios.get(url, { headers: { 'Authorization': `Bearer ${token}` } });
@@ -555,6 +637,7 @@
 
             if (data && data.length > 0) {
                 console.log(`✅ Данные о проектах получены (${data.length} записей)`);
+                showBanner(`✅ Данные о проектах получены (${data.length} записей)`, 'success');
                 const tableHTML = createTableFromData(data, 'project');
                 const processedTableHTML = processTable(tableHTML, 'project');
                 copyToClipboard(processedTableHTML);
@@ -564,6 +647,7 @@
             }
         } catch (error) {
             console.error('❌ Ошибка при получении данных о проектах:', error);
+            showBanner('❌ Ошибка при получении данных о проектах:', 'error');
             alert('Не удалось получить данные о проектах');
         }
     }
@@ -577,6 +661,7 @@
         const url = `https://dmc.beeline.ru/api/processes/tasks/?gpo=&page=1&page_size=${totalItems}&branch=${filter_branch}&uncompleted_tasks=${uncompletedTasks}`;
 
         console.log(`🚀 Запрашиваем задачи: ${url}`);
+        showBanner(`🚀 Запрашиваем задачи...`, 'info');
 
         try {
             const response = await axios.get(url, { headers: { 'Authorization': `Bearer ${token}` } });
@@ -584,6 +669,7 @@
 
             if (data && data.length > 0) {
                 console.log(`✅ Данные о задачах получены (${data.length} записей)`);
+                showBanner(`✅ Данные о задачах получены (${data.length} записей)`, 'success');
                 const tableHTML = createTableFromData(data, 'task');
                 const processedTableHTML = processTable(tableHTML, 'task');
                 copyToClipboard(processedTableHTML);
@@ -593,6 +679,7 @@
             }
         } catch (error) {
             console.error('❌ Ошибка при получении данных о задачах:', error);
+            showBanner('❌ Ошибка при получении данных о задачах:', 'error');
             alert('Не удалось получить данные о задачах');
         }
     }
@@ -842,8 +929,10 @@ function createTableFromData(data, type) {
     function copyToClipboard(text) {
         navigator.clipboard.writeText(text).then(() => {
             console.log('📋 Текст скопирован в буфер обмена');
+            showBanner('📋 Текст скопирован в буфер обмена', 'success');
         }).catch(err => {
             console.error('❌ Ошибка при копировании в буфер обмена:', err);
+            showBanner('❌ Ошибка при копировании в буфер обмена:', 'error');
         });
     }
 
@@ -852,6 +941,7 @@ function createTableFromData(data, type) {
         const token = findToken();
         if (!token) {
             console.error('❌ Токен не найден');
+            showBanner('❌ Токен не найден', 'error');
             alert('Токен не найден');
             return;
         }
@@ -872,6 +962,7 @@ function createTableFromData(data, type) {
             });
         } catch (error) {
             console.error('Ошибка при загрузке филиалов:', error);
+            showBanner('❌ Ошибка при загрузке филиалов:', 'error');
             alert('Не удалось загрузить список филиалов');
         }
     }
