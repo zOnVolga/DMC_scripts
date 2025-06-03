@@ -10,6 +10,8 @@
 // @connect      dmc.beeline.ru
 // @grant        unsafeWindow
 // @grant        GM_addStyle
+// @downloadURL  https://github.com/zOnVolga/DMC_scripts/raw/refs/heads/main/DMC_uploader.js
+// @updateURL    https://github.com/zOnVolga/DMC_scripts/raw/refs/heads/main/DMC_uploader.js
 // ==/UserScript==
 
 (function () {
