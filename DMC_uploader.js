@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PDF Classifier (upload files) Stable v1.5
 // @namespace    http://tampermonkey.net/
-// @version      1.5.0
+// @version      1.5.1
 // @description  Drag-and-drop загрузка и классификация PDF с улучшенным выводом этапов
 // @author       zOnVolga + GPT
 // @match        https://dmc.beeline.ru/projects*
