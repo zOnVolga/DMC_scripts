@@ -12,7 +12,7 @@
 // @grant        GM_addStyle
 // @downloadURL  https://github.com/zOnVolga/DMC_scripts/raw/refs/heads/main/DMC_uploader.js
 // @updateURL    https://github.com/zOnVolga/DMC_scripts/raw/refs/heads/main/DMC_uploader.js
-//@icon          https://images.icon-icons.com/217/PNG/512/Package-upload_25335.png
+// @icon         https://images.icon-icons.com/217/PNG/512/Package-upload_25335.png
 // ==/UserScript==
 
 (function () {
