@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PDF Classifier (upload files) Stable v1.5
 // @namespace    http://tampermonkey.net/
-// @version      1.5.1
+// @version      1.5.2
 // @description  Drag-and-drop загрузка и классификация PDF с улучшенным выводом этапов
 // @author       zOnVolga + GPT
 // @match        https://dmc.beeline.ru/projects*
@@ -32,7 +32,8 @@
     const documentTypeMapping = {
         'АТП': 'Акт технической приемки объекта связи',
         'ПЗ': 'Протокол замечаний по результатам проверки документации и строительно-монтажных работ объекта связи',
-        'ПЗППД': 'Протокол замечаний по результатам проверки документации и строительно-монтажных работ объекта связи'
+        'ПЗППД': 'Протокол замечаний по результатам проверки документации и строительно-монтажных работ объекта связи',
+        'ИД': 'Исполнительная документация БС'
     };
 
     const TOKEN_KEYS = ['token', 'authToken', 'accessToken'];
@@ -312,6 +313,7 @@
                 if (filter === 'CryptoPro#20PDF') name = decodeUTF16BE(name).slice(1);
                 sigs.push({ filter, date, name });
             }
+
             const counts = {}, datesMap = {};
             sigs.forEach(s => {
                 const rep = representativeMapping[s.name] || 'Неизвестный';
@@ -359,28 +361,47 @@
                 `<tr><th>Проект</th><td>${proj}</td><th>БС</th><td>${bs}</td></tr>` +
                 `<tr><th>Регион</th><td id="vm-region" colspan=3>${branch}</td></tr>` +
                 `<tr><th>Тип документа</th><td colspan=3>${dtKey ? documentTypeMapping[dtKey] : 'неизвестный'}</td></tr>` +
-                `<tr><th>Стадия</th><td colspan=3 id="vm-stage"></td></tr>` +
+                `<tr><th>Статус</th><td colspan=3 id="vm-status"></td></tr>` +
                 `<tr><th>Представители</th>` + reps.map(r => `<th>${r}</th>`).join('') + `</tr>`;
 
-            html += `<tr><td>Технический запуск</td>` + reps.map(r => {
-                const has = datesMap[r] && datesMap[r][0];
-                const d = has ? formatDate(datesMap[r][0]) : '';
-                return `<td>${has ? '✅ ' + d : '❌'}</td>`;
-            }).join('') + `</tr>`;
+            if (dtKey === 'ИД') {
+                const hasConstructionSignature = datesMap['Отдел строительства'] && datesMap['Отдел строительства'].length > 0;
+                const hasGPOSignature = datesMap['Исполнитель (ГПО)'] && datesMap['Исполнитель (ГПО)'].length > 0;
 
-            html += `<tr><td>Замечания устранены</td>` + reps.map(r => {
-                const has2 = datesMap[r] && datesMap[r][1];
-                const d2 = has2 ? formatDate(datesMap[r][1]) : '';
-                return `<td>${has2 ? '✅ ' + d2 : '❌'}</td>`;
-            }).join('') + `</tr>` +
-                `</table>`;
+                let statusText = '❌ Не подписан';
+                if (hasConstructionSignature && hasGPOSignature) {
+                    statusText = '✅ Подписан';
+                }
 
-            const countsArr = reps.map(r => datesMap[r] ? datesMap[r].length : 0);
-            let stageText;
-            if (countsArr.some(v => v === 0)) stageText = 'Документ не подписан';
-            else if (countsArr.some(v => v < 2)) stageText = 'Технический запуск';
-            else stageText = 'Замечания устранены';
-            html = html.replace(/id="vm-stage"><\/td>/, `id="vm-stage">${stageText}<\/td>`);
+                // Определяем заголовок для подписей
+                let signatureHeader = 'Подписи';
+                if (fn.includes('АФУ')) {
+                    signatureHeader = 'Подписи АФУ';
+                } else if (fn.includes('РРС')) {
+                    signatureHeader = 'Подписи РРС';
+                }
+
+                html = html.replace(/id="vm-status"><\/td>/, `id="vm-status">${statusText}</td>`);
+
+                html += `<tr><td>${signatureHeader}</td>` +
+                    `<td>${hasConstructionSignature ? '✅ ' + formatDate(datesMap['Отдел строительства'][0]) : '❌'}</td>` +
+                    `<td>⊟ Не требуется</td>` +
+                    `<td>${hasGPOSignature ? '✅ ' + formatDate(datesMap['Исполнитель (ГПО)'][0]) : '❌'}</td></tr>`;
+            } else {
+                html += `<tr><td>Технический запуск</td>` + reps.map(r => {
+                    const has = datesMap[r] && datesMap[r][0];
+                    const d = has ? formatDate(datesMap[r][0]) : '';
+                    return `<td>${has ? '✅ ' + d : '❌'}</td>`;
+                }).join('') + `</tr>`;
+
+                html += `<tr><td>Замечания устранены</td>` + reps.map(r => {
+                    const has2 = datesMap[r] && datesMap[r][1];
+                    const d2 = has2 ? formatDate(datesMap[r][1]) : '';
+                    return `<td>${has2 ? '✅ ' + d2 : '❌'}</td>`;
+                }).join('') + `</tr>`;
+            }
+
+            html += `</table>`;
             outputEl.innerHTML = html;
 
             let systemDocTitle = '';
@@ -392,6 +413,8 @@
                 systemDocTitle = (stageText === 'Замечания устранены')
                     ? 'Протокол замечаний по результатам проверки документации и строительно-монтажных работ объекта связи с отметками об устранении'
                     : 'Протокол замечаний по результатам проверки документации и строительно-монтажных работ объекта связи (Технический запуск)';
+            } else if (fn.includes('ИД') && fn.includes('МОД')) {
+                systemDocTitle = 'Исполнительная документация БС';
             }
 
             console.log('[PDF Classifier] Название документа:', systemDocTitle);
@@ -435,8 +458,14 @@
                         statusEl.textContent = 'Проекты не найдены';
                         return;
                     }
-                    if (data.count === 1) {
-                        const project = data.results[0];
+
+                    let projects = data.results;
+                    if (systemDocTitle === 'Исполнительная документация БС') {
+                        projects = projects.filter(project => project.types_project === 'Модернизация БС');
+                    }
+
+                    if (projects.length === 1) {
+                        const project = projects[0];
                         const regionCell = document.getElementById('vm-region');
                         if (regionCell && project.branch) regionCell.textContent = project.branch;
                         statusEl.innerHTML = `<strong>${project.project_ext_id} | ${project.types_project} | ${project.open_date}</strong>`;
@@ -447,7 +476,7 @@
                     } else {
                         statusEl.textContent = 'Выберите проект:';
                         const container = document.createElement('div');
-                        data.results.forEach(project => {
+                        projects.forEach(project => {
                             const button = document.createElement('button');
                             button.textContent = `${project.project_ext_id} | ${project.types_project} | ${project.open_date}`;
                             button.className = 'vm-choice';
