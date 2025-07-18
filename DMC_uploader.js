@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         PDF Classifier (upload files) Stable v1.5.5
+// @name         PDF Classifier (upload files) Stable v1.5.6
 // @namespace    http://tampermonkey.net/
-// @version      1.5.5
+// @version      1.5.6
 // @description  Drag-and-drop загрузка и классификация PDF с улучшенным выводом этапов
 // @author       zOnVolga + GPT
 // @match        https://dmc.beeline.ru/projects*
@@ -366,7 +366,7 @@
                 `<tr><th>Проект</th><td>${proj}</td><th>БС</th><td>${bs}</td></tr>` +
                 `<tr><th>Регион</th><td id="vm-region" colspan=3>${branch}</td></tr>` +
                 `<tr><th>Тип документа</th><td colspan=3>${dtKey ? documentTypeMapping[dtKey] : 'неизвестный'}</td></tr>` +
-                `<tr><th>Статус</th><td colspan=3 id="vm-status"></td></tr>` +
+                `<tr><th>Статус</th><td colspan=3 id="vm-status">${stageText}</td></tr>` +
                 `<tr><th>Представители</th>` + reps.map(r => `<th>${r}</th>`).join('') + `</tr>`;
 
             if (dtKey === 'ИД') {
