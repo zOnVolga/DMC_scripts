@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         PDF Classifier (upload files) Stable v1.5.4
+// @name         PDF Classifier (upload files) Stable v1.5.5
 // @namespace    http://tampermonkey.net/
-// @version      1.5.4
+// @version      1.5.5
 // @description  Drag-and-drop загрузка и классификация PDF с улучшенным выводом этапов
 // @author       zOnVolga + GPT
 // @match        https://dmc.beeline.ru/projects*
@@ -409,13 +409,30 @@
             html += `</table>`;
             outputEl.innerHTML = html;
 
+            const isID = dtKey === 'ИД';
+            const targetReps = isID
+                ? ['Отдел строительства', 'Исполнитель (ГПО)']
+                : ['Отдел строительства', 'Отдел эксплуатации', 'Исполнитель (ГПО)'];
+
+            const firstSigs  = targetReps.filter(r => datesMap[r] && datesMap[r][0]).length;
+            const secondSigs = targetReps.filter(r => datesMap[r] && datesMap[r][1]).length;
+
+            let stageText;
+            if (firstSigs === 0) {
+                stageText = 'Не подписан';
+            } else if (secondSigs === targetReps.length) {
+                stageText = 'Устранение замечаний';
+            } else {
+                stageText = 'Технический запуск';
+            }
+
             let systemDocTitle = '';
             if (fn.includes('АТП')) {
-                systemDocTitle = (stageText === 'Замечания устранены')
+                systemDocTitle = stageText === 'Устранение замечаний'
                     ? 'Акт технической приёмки объекта связи (по результатам устранения замечаний)'
                     : 'Акт технической приемки объекта связи (Технический запуск)';
             } else if (fn.includes('ПЗ') || fn.includes('ПЗППД')) {
-                systemDocTitle = (stageText === 'Замечания устранены')
+                systemDocTitle = stageText === 'Устранение замечаний'
                     ? 'Протокол замечаний по результатам проверки документации и строительно-монтажных работ объекта связи с отметками об устранении'
                     : 'Протокол замечаний по результатам проверки документации и строительно-монтажных работ объекта связи (Технический запуск)';
             } else if (fn.includes('ИД') && fn.includes('МОД')) {
