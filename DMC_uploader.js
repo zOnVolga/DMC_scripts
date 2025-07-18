@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         PDF Classifier (upload files) Stable v1.5.7
+// @name         PDF Classifier (upload files) Stable v1.5.8
 // @namespace    http://tampermonkey.net/
-// @version      1.5.7
+// @version      1.5.8
 // @description  Drag-and-drop загрузка и классификация PDF с улучшенным выводом этапов
 // @author       zOnVolga + GPT
 // @match        https://dmc.beeline.ru/projects*
@@ -21,6 +21,7 @@
     const PDFJS_VERSION = '3.10.111';
     const PDFJS_BASE = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/build`;
     let pdfjsLoaded = false;
+    let stageText = '';
 
     const representativeMapping = {
         'SKorobkin': 'Отдел строительства',
@@ -417,7 +418,6 @@
             const firstSigs  = targetReps.filter(r => datesMap[r] && datesMap[r][0]).length;
             const secondSigs = targetReps.filter(r => datesMap[r] && datesMap[r][1]).length;
 
-            let stageText = '';
             if (firstSigs === 0) {
                 stageText = 'Не подписан';
             } else if (secondSigs === targetReps.length) {
