@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PDF Classifier (upload files) Stable v1.5
 // @namespace    http://tampermonkey.net/
-// @version      1.5.2
+// @version      1.5.3
 // @description  Drag-and-drop загрузка и классификация PDF с улучшенным выводом этапов
 // @author       zOnVolga + GPT
 // @match        https://dmc.beeline.ru/projects*
@@ -25,6 +25,7 @@
     const representativeMapping = {
         'SKorobkin': 'Отдел строительства',
         'ASSuyazov': 'Отдел эксплуатации',
+        'AlASergeev': 'Отдел эксплуатации',
         'EvAKucherenko': 'Отдел эксплуатации',
         'Евстифеев Олег Анатольевич': 'Исполнитель (ГПО)'
     };
