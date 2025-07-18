@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         PDF Classifier (upload files) Stable v1.5.6
+// @name         PDF Classifier (upload files) Stable v1.5.7
 // @namespace    http://tampermonkey.net/
-// @version      1.5.6
+// @version      1.5.7
 // @description  Drag-and-drop загрузка и классификация PDF с улучшенным выводом этапов
 // @author       zOnVolga + GPT
 // @match        https://dmc.beeline.ru/projects*
@@ -417,7 +417,7 @@
             const firstSigs  = targetReps.filter(r => datesMap[r] && datesMap[r][0]).length;
             const secondSigs = targetReps.filter(r => datesMap[r] && datesMap[r][1]).length;
 
-            let stageText;
+            let stageText = '';
             if (firstSigs === 0) {
                 stageText = 'Не подписан';
             } else if (secondSigs === targetReps.length) {
