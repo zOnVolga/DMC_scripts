@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Beeline DMC Extractor (v.7.5.1 | 2025-05-27)
+// @name         Beeline DMC Extractor (v.7.5.2 | 2025-05-27)
 // @namespace    http://tampermonkey.net/
-// @version      7.5.1
+// @version      7.5.2
 // @description  Извлечение данных из Beeline DMC с возможностью автообновления и уведомлением о последнем коммите. Улучшена производительность и надежность.
 // @author       zOnVolga
 // @match        https://dmc.beeline.ru/*
@@ -11,9 +11,9 @@
 // @grant        GM_setValue
 // @connect      raw.githubusercontent.com
 // @connect      api.github.com
-// @downloadURL  https://raw.githubusercontent.com/zOnVolga/DM_scripts/main/Beeline_DMC_Data_Extractor.js
-// @updateURL    https://raw.githubusercontent.com/zOnVolga/DM_scripts/main/Beeline_DMC_Data_Extractor.js
-// @icon         https://raw.githubusercontent.com/zOnVolga/DM_scripts/main/icon-beeline-yellow.svg
+// @downloadURL  https://raw.githubusercontent.com/zOnVolga/DMC_scripts/main/Beeline_DMC_Data_Extractor.js
+// @updateURL    https://raw.githubusercontent.com/zOnVolga/DMC_scripts/main/Beeline_DMC_Data_Extractor.js
+// @icon         https://raw.githubusercontent.com/zOnVolga/DMC_scripts/main/icon-beeline-yellow.svg
 // ==/UserScript==
 (function () {
     'use strict';
