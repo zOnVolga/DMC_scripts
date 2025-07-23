@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Beeline DMC Extractor (v.7.4.0 | 2025-05-26)
+// @name         Beeline DMC Extractor (v.7.5.1 | 2025-05-27)
 // @namespace    http://tampermonkey.net/
-// @version      7.4.0
-// @description  Извлечение данных из Beeline DMC с возможностью автообновления и уведомлением о последнем коммите
+// @version      7.5.1
+// @description  Извлечение данных из Beeline DMC с возможностью автообновления и уведомлением о последнем коммите. Улучшена производительность и надежность.
 // @author       zOnVolga
 // @match        https://dmc.beeline.ru/*
 // @grant        GM_xmlhttpRequest
@@ -11,70 +11,20 @@
 // @grant        GM_setValue
 // @connect      raw.githubusercontent.com
 // @connect      api.github.com
-// @downloadURL  https://raw.githubusercontent.com/zOnVolga/DMC_scripts/main/Beeline_DMC_Data_Extractor.js
-// @updateURL    https://raw.githubusercontent.com/zOnVolga/DMC_scripts/main/Beeline_DMC_Data_Extractor.js
-// @icon         https://raw.githubusercontent.com/zOnVolga/DMC_scripts/main/icon-beeline-yellow.svg
+// @downloadURL  https://raw.githubusercontent.com/zOnVolga/DM_scripts/main/Beeline_DMC_Data_Extractor.js
+// @updateURL    https://raw.githubusercontent.com/zOnVolga/DM_scripts/main/Beeline_DMC_Data_Extractor.js
+// @icon         https://raw.githubusercontent.com/zOnVolga/DM_scripts/main/icon-beeline-yellow.svg
 // ==/UserScript==
-
 (function () {
     'use strict';
 
-    // Глобальные переменные
-    let axios = null;
+    // === Глобальные переменные ===
+    let axios = null; // Будет ссылаться на сайтовой axios или загруженный
     let axiosLoadedPromise = null;
-
-    // Переменные для работы модального окна
-    let branchSelect; // Теперь объявлена глобально
-    let confirmButton;
-    let selectedFilters = []; // Также глобально
-
-    // Функция безопасной загрузки Axios
-    function loadAxios() {
-        if (axiosLoadedPromise) return axiosLoadedPromise;
-        axiosLoadedPromise = new Promise((resolve, reject) => {
-            const script = document.createElement('script');
-            script.src = 'https://unpkg.com/axios@1.8.4/dist/axios.min.js';
-            script.onload = () => {
-                if (window.axios || unsafeWindow.axios) {
-                    axios = window.axios || unsafeWindow.axios;
-                    console.log('✅ Axios загружен через DOM');
-                    resolve();
-                } else {
-                    console.warn('⚠️ Axios не найден в window, пробуем через GM_xmlhttpRequest...');
-                    fallbackLoadAxios(resolve, reject);
-                }
-            };
-            script.onerror = () => {
-                console.error('❌ Ошибка загрузки Axios через DOM');
-                fallbackLoadAxios(resolve, reject);
-            };
-            document.head.appendChild(script);
-        });
-        return axiosLoadedPromise;
-    }
-
-    // Резервная загрузка Axios через GM_xmlhttpRequest
-    function fallbackLoadAxios(resolve, reject) {
-        GM_xmlhttpRequest({
-            method: 'GET',
-            url: 'https://unpkg.com/axios@1.6.7/dist/axios.min.js',
-            onload: function (response) {
-                try {
-                    eval(response.responseText); // Внедряем Axios как глобальную переменную
-                    axios = window.axios || unsafeWindow.axios;
-                    console.log('✅ Axios загружен через GM_xmlhttpRequest');
-                    resolve();
-                } catch (e) {
-                    console.error('❌ Ошибка при обработке Axios:', e);
-                    reject(e);
-                }
-            },
-            onerror: function (error) {
-                console.error('❌ Ошибка загрузки Axios через GM_xmlhttpRequest:', error);
-                reject(error);
-            }
-        });
-    }
+    let currentProgressBanner = null; // Для отслеживания баннера прогресса
+    let branchSelect; // <-- ДОБАВЛЕНО: Объявление глобальной переменной
+    let confirmButton; // Уже было объявлено
+    let selectedFilters = []; // Уже было объявлено
 
     // Фильтры по филиалам
     // ПФ (Юг): Астраханский,Волгоградский,Элистинский,Краснодарский,Ростовский-на-Дону,Сочинский
@@ -175,12 +125,10 @@
     };
 
 
-    // === Вывод баннера на страницу (многоуровневый стек) ===
-    function showBanner(message, type = 'info') {
+    // === Вывод баннера на страницу (улучшенный) ===
+    function showBanner(message, type = 'info', duration = 10000, isProgress = false) {
         const containerId = 'automation-banner-container';
         let container = document.getElementById(containerId);
-
-        // Создаём контейнер, если его нет
         if (!container) {
             container = document.createElement('div');
             container.id = containerId;
@@ -198,7 +146,6 @@
             document.body.appendChild(container);
         }
 
-        // Создаём сам баннер
         const banner = document.createElement('div');
         banner.style.background = '#fff3cd';
         banner.style.color = '#856404';
@@ -214,46 +161,81 @@
         banner.style.width = 'max-content';
         banner.style.maxWidth = '100%';
         banner.style.wordBreak = 'break-word';
+        banner.style.minWidth = '250px'; // Минимальная ширина для прогресса
 
-        // === Цвета в зависимости от типа ===
         switch (type) {
             case 'error':
                 banner.style.background = '#f8d7da';
                 banner.style.color = '#721c24';
                 banner.style.borderLeftColor = '#721c24';
-                banner.textContent = message
                 break;
             case 'success':
                 banner.style.background = '#d4edda';
                 banner.style.color = '#155724';
                 banner.style.borderLeftColor = '#155724';
-                banner.textContent = message;
+                break;
+            case 'progress':
+                banner.style.background = '#cce5ff';
+                banner.style.color = '#004085';
+                banner.style.borderLeftColor = '#004085';
                 break;
             default:
-                banner.textContent = message;
                 break;
         }
 
-        // Вставляем баннер сверху
+        banner.textContent = message;
+
+        // Если это баннер прогресса, сохраняем ссылку на него
+        if (isProgress) {
+            if (currentProgressBanner && currentProgressBanner.parentElement) {
+                currentProgressBanner.remove(); // Удаляем старый
+            }
+            currentProgressBanner = banner;
+        }
+
         container.insertBefore(banner, container.firstChild);
 
-        // Автоматическое исчезновение через 10 секунд
-        setTimeout(() => {
-            banner.style.opacity = '0';
+        // Автоматическое исчезновение (кроме прогресса)
+        if (!isProgress && duration > 0) {
             setTimeout(() => {
-                if (banner.parentElement === container) {
-                    banner.remove();
-                }
-            }, 500);
-        }, 10000);
+                banner.style.opacity = '0';
+                setTimeout(() => {
+                    if (banner.parentElement === container) {
+                        banner.remove();
+                        if (isProgress) currentProgressBanner = null;
+                    }
+                }, 500);
+            }, duration);
+        }
+
+        return banner; // Возвращаем элемент для возможного обновления/удаления
     }
 
-    // Проверка токена
+    function updateProgressBanner(message) {
+        if (currentProgressBanner) {
+            currentProgressBanner.textContent = message;
+        } else {
+            showBanner(message, 'progress', 0, true); // Создаем, если еще нет
+        }
+    }
+
+    function hideProgressBanner() {
+        if (currentProgressBanner) {
+            currentProgressBanner.style.opacity = '0';
+            setTimeout(() => {
+                if (currentProgressBanner && currentProgressBanner.parentElement) {
+                    currentProgressBanner.remove();
+                }
+                currentProgressBanner = null;
+            }, 500);
+        }
+    }
+
+    // === Поиск токена (без изменений) ===
     function isToken(value) {
         return typeof value === 'string' && value.split('.').length === 3;
     }
 
-    // Поиск токена
     function findToken() {
         for (const key in localStorage) {
             const value = localStorage.getItem(key);
@@ -266,7 +248,6 @@
         return getCookie('token');
     }
 
-    // Получение cookie
     function getCookie(name) {
         const matches = document.cookie.match(new RegExp(
             "(?:^|; )" + name.replace(/([\.$?*|{}\(\)\[\]\\\/\+^])/g, '\\$1') + "=([^;]*)"
@@ -274,8 +255,85 @@
         return matches ? decodeURIComponent(matches[1]) : undefined;
     }
 
-    // Создание кнопки
+    // === Попытка использовать сайтовой Axios ===
+    function trySiteAxios() {
+        // Попробуем найти axios в глобальных объектах
+        if (typeof unsafeWindow !== 'undefined' && unsafeWindow.axios) {
+             console.log('✅ Используется сайтовой Axios (unsafeWindow)');
+            return unsafeWindow.axios;
+        }
+        if (typeof window !== 'undefined' && window.axios) {
+             console.log('✅ Используется сайтовой Axios (window)');
+            return window.axios;
+        }
+        // Иногда axiosInstance создается локально, попробуем найти его
+        // Это более сложная задача, но можно поискать в window или других объектах
+        // Например, если он экспортируется как свойство модуля
+        // Для простоты оставим загрузку внешнего как резерв
+        return null;
+    }
+
+    // === Загрузка Axios (улучшенная) ===
+    function loadAxios() {
+        if (axiosLoadedPromise) return axiosLoadedPromise;
+
+        axiosLoadedPromise = new Promise((resolve, reject) => {
+            // Сначала пробуем использовать сайтовой
+            const siteAxios = trySiteAxios();
+            if (siteAxios) {
+                axios = siteAxios;
+                resolve();
+                return;
+            }
+
+            // Если сайтовой нет, загружаем внешний
+            console.log('🔄 Загрузка внешнего Axios...');
+            const script = document.createElement('script');
+            script.src = 'https://unpkg.com/axios@1.6.7/dist/axios.min.js'; // Используем более стабильную версию
+            script.onload = () => {
+                if (window.axios || unsafeWindow.axios) {
+                    axios = window.axios || unsafeWindow.axios;
+                     console.log('✅ Axios загружен через DOM');
+                    resolve();
+                } else {
+                     console.warn('⚠️ Axios не найден в window после загрузки DOM, пробуем через GM_xmlhttpRequest...');
+                    fallbackLoadAxios(resolve, reject);
+                }
+            };
+            script.onerror = () => {
+                 console.error('❌ Ошибка загрузки Axios через DOM');
+                fallbackLoadAxios(resolve, reject);
+            };
+            document.head.appendChild(script);
+        });
+        return axiosLoadedPromise;
+    }
+
+    function fallbackLoadAxios(resolve, reject) {
+        GM_xmlhttpRequest({
+            method: 'GET',
+            url: 'https://unpkg.com/axios@1.6.7/dist/axios.min.js',
+            onload: function (response) {
+                try {
+                    eval(response.responseText);
+                    axios = window.axios || unsafeWindow.axios;
+                     console.log('✅ Axios загружен через GM_xmlhttpRequest');
+                    resolve();
+                } catch (e) {
+                     console.error('❌ Ошибка при обработке Axios:', e);
+                    reject(e);
+                }
+            },
+            onerror: function (error) {
+                 console.error('❌ Ошибка загрузки Axios через GM_xmlhttpRequest:', error);
+                reject(error);
+            }
+        });
+    }
+
+    // === Создание кнопки (без изменений) ===
     function createButton() {
+        // ... (оставляем как есть) ...
         const button = document.createElement('button');
         button.textContent = '📋 Копировать данные в буфер обмена';
         button.style.position = 'fixed';
@@ -283,94 +341,123 @@
         button.style.left = '50%';
         button.style.transform = 'translateX(-50%)';
         button.style.zIndex = '1000';
-        button.style.padding = '10px';
+        button.style.padding = '10px 15px'; // Слегка уменьшены отступы
         button.style.backgroundColor = '#4CAF50';
         button.style.color = 'white';
         button.style.border = 'none';
         button.style.borderRadius = '5px';
         button.style.cursor = 'pointer';
-        button.style.fontSize = '20px';
+        button.style.fontSize = '16px'; // Слегка уменьшен шрифт
+        button.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)'; // Добавлена тень
+        button.addEventListener('mouseenter', () => { // Эффект наведения
+            button.style.backgroundColor = '#45a049';
+            button.style.transform = 'translateX(-50%) scale(1.02)';
+        });
+        button.addEventListener('mouseleave', () => {
+            button.style.backgroundColor = '#4CAF50';
+            button.style.transform = 'translateX(-50%) scale(1)';
+        });
         button.addEventListener('click', showModal);
         document.body.appendChild(button);
     }
 
-    // Безопасный showModal
+
+    // === Модальное окно (без изменений, кроме удаления задач) ===
     async function showModal() {
-        const modal = document.createElement('div');
+        // ... (оставляем логику, но убираем всё, что связано с tasks) ...
+         const modal = document.createElement('div');
         modal.style.position = 'fixed';
         modal.style.top = '50%';
         modal.style.left = '50%';
         modal.style.transform = 'translate(-50%, -50%)';
         modal.style.backgroundColor = '#fff';
-        modal.style.padding = '20px';
-        modal.style.borderRadius = '10px';
-        modal.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
+        modal.style.padding = '25px'; // Увеличен padding
+        modal.style.borderRadius = '12px'; // Более закругленные углы
+        modal.style.boxShadow = '0 6px 20px rgba(0, 0, 0, 0.2)'; // Более выраженная тень
         modal.style.zIndex = '10000';
-        modal.style.width = '300px';
+        modal.style.width = '350px'; // Немного шире
         modal.style.textAlign = 'center';
+        modal.style.fontFamily = 'Arial, sans-serif'; // Установка шрифта
 
         const title = document.createElement('h3');
         title.textContent = 'Выберите фильтры';
+        title.style.marginTop = '0';
+        title.style.color = '#333'; // Цвет заголовка
         modal.appendChild(title);
 
         const container = document.createElement('div');
         container.style.display = 'flex';
         container.style.flexDirection = 'column';
-        container.style.gap = '10px';
+        container.style.gap = '12px'; // Увеличен отступ
         modal.appendChild(container);
 
-        // Функция создания переключателя
+        // Функция создания переключателя (немного улучшена стилизация)
         const createSwitch = (id, value, label, isChecked = false) => {
-            const switchContainer = document.createElement('label');
+            // ... (оставляем как есть, можно немного улучшить стили) ...
+             const switchContainer = document.createElement('label');
             switchContainer.style.display = 'flex';
             switchContainer.style.alignItems = 'center';
-            switchContainer.style.gap = '10px';
+            switchContainer.style.gap = '12px'; // Увеличен отступ
+            switchContainer.style.cursor = 'pointer'; // Курсор указателя
 
             const checkbox = document.createElement('input');
             checkbox.type = 'checkbox';
             checkbox.id = id;
             checkbox.value = value;
             checkbox.checked = isChecked;
-            checkbox.style.display = 'none';
+            checkbox.style.display = 'none'; // Скрываем оригинальный чекбокс
 
             const slider = document.createElement('span');
             slider.style.position = 'relative';
-            slider.style.width = '40px';
-            slider.style.height = '20px';
+            slider.style.width = '44px'; // Немного увеличен
+            slider.style.height = '22px';
             slider.style.backgroundColor = isChecked ? '#4CAF50' : '#ccc';
-            slider.style.borderRadius = '20px';
+            slider.style.borderRadius = '22px';
             slider.style.cursor = 'pointer';
-            slider.style.transition = 'background-color 0.3s';
+            slider.style.transition = 'background-color 0.3s, transform 0.1s';
+            slider.style.flexShrink = '0'; // Не сжимать слайдер
 
             const circle = document.createElement('span');
             circle.style.position = 'absolute';
-            circle.style.width = '16px';
-            circle.style.height = '16px';
+            circle.style.width = '18px';
+            circle.style.height = '18px';
             circle.style.backgroundColor = '#fff';
             circle.style.borderRadius = '50%';
             circle.style.top = '2px';
-            circle.style.left = isChecked ? '22px' : '2px';
-            circle.style.transition = 'left 0.3s';
+            circle.style.left = isChecked ? '24px' : '2px'; // Скорректировано для нового размера
+            circle.style.transition = 'left 0.3s, transform 0.1s';
+            circle.style.boxShadow = '0 1px 3px rgba(0,0,0,0.2)'; // Тень для кружка
 
             slider.appendChild(circle);
+
+            // Эффекты нажатия
+            checkbox.addEventListener('mousedown', () => {
+                circle.style.transform = 'scale(0.9)';
+            });
+            checkbox.addEventListener('mouseup', () => {
+                circle.style.transform = 'scale(1)';
+            });
+            checkbox.addEventListener('mouseleave', () => {
+                circle.style.transform = 'scale(1)';
+            });
+
             checkbox.addEventListener('change', () => {
                 slider.style.backgroundColor = checkbox.checked ? '#4CAF50' : '#ccc';
-                circle.style.left = checkbox.checked ? '22px' : '2px';
+                circle.style.left = checkbox.checked ? '24px' : '2px';
+                circle.style.transform = 'scale(1)'; // Сброс анимации при изменении
             });
 
             const labelElement = document.createElement('span');
             labelElement.textContent = label;
-            labelElement.style.fontSize = '14px';
+            labelElement.style.fontSize = '15px'; // Немного увеличен шрифт
             labelElement.style.color = '#333';
 
             switchContainer.appendChild(checkbox);
             switchContainer.appendChild(slider);
             switchContainer.appendChild(labelElement);
 
-            // Добавляем ссылки для удобства
             switchContainer.checkbox = checkbox;
             switchContainer.switchContainer = switchContainer;
-
             return switchContainer;
         };
 
@@ -378,7 +465,7 @@
         const selectBranchSwitch = createSwitch('selectBranch', 'true', 'Выбрать филиал');
         container.appendChild(selectBranchSwitch);
 
-        // Переключатели регионов
+        // Переключатели регионов (без изменений)
         const southSwitch = createSwitch('south', filter_south, 'ПФ (Юг)');
         const volgaSwitch = createSwitch('volga', filter_volga, 'ПФ (Волга)');
         const szSwitch = createSwitch('sz', filter_sz, 'ПФ (СЗ)');
@@ -397,97 +484,112 @@
         container.appendChild(ufSwitch);
         container.appendChild(cfSwitch);
 
-        // Контейнер выпадающего списка филиалов
+        // Контейнер выпадающего списка филиалов (без изменений)
         const branchSelectContainer = document.createElement('div');
         branchSelectContainer.style.display = 'none';
+        branchSelectContainer.style.marginTop = '10px';
+
         const branchSelectLabel = document.createElement('span');
         branchSelectLabel.textContent = 'Выберите филиалы:';
         branchSelectLabel.style.fontSize = '14px';
         branchSelectLabel.style.color = '#333';
         branchSelectLabel.style.marginBottom = '5px';
+        branchSelectLabel.style.display = 'block';
         branchSelectContainer.appendChild(branchSelectLabel);
 
-        branchSelect = document.createElement('select'); // без const/let
+        // Используем var для совместимости, как в оригинале
+        branchSelect = document.createElement('select');
         branchSelect.multiple = true;
         branchSelect.size = 8;
         branchSelect.style.width = '100%';
-        branchSelect.style.padding = '5px';
+        branchSelect.style.padding = '6px';
         branchSelect.style.border = '1px solid #ccc';
         branchSelect.style.borderRadius = '5px';
+        branchSelect.style.boxSizing = 'border-box';
         branchSelectContainer.appendChild(branchSelect);
-
         container.appendChild(branchSelectContainer);
 
-        // Логика отображения/скрытия филиалов
+        // Логика отображения/скрытия филиалов (без изменений)
         selectBranchSwitch.querySelector('input').addEventListener('change', () => {
             const isChecked = selectBranchSwitch.querySelector('input').checked;
             if (isChecked) {
-                southSwitch.style.display = 'none';
-                volgaSwitch.style.display = 'none';
-                szSwitch.style.display = 'none';
-                skSwitch.style.display = 'none';
-                dvfSwitch.style.display = 'none';
-                sfSwitch.style.display = 'none';
-                ufSwitch.style.display = 'none';
-                cfSwitch.style.display = 'none';
+                // Скрываем все регионы
+                [southSwitch, volgaSwitch, szSwitch, skSwitch, dvfSwitch, sfSwitch, ufSwitch, cfSwitch].forEach(s => s.style.display = 'none');
                 branchSelectContainer.style.display = 'block';
                 loadBranches();
             } else {
-                southSwitch.style.display = 'flex';
-                volgaSwitch.style.display = 'flex';
-                szSwitch.style.display = 'flex';
-                skSwitch.style.display = 'flex';
-                dvfSwitch.style.display = 'flex';
-                sfSwitch.style.display = 'flex';
-                ufSwitch.style.display = 'flex';
-                cfSwitch.style.display = 'flex';
+                // Показываем все регионы
+                [southSwitch, volgaSwitch, szSwitch, skSwitch, dvfSwitch, sfSwitch, ufSwitch, cfSwitch].forEach(s => s.style.display = 'flex');
                 branchSelectContainer.style.display = 'none';
             }
         });
 
-        // --- Кнопка "Только незавершенные" (только на странице задач) ---
-        let uncompletedTasksSwitch = null;
-        if (window.location.href.includes('/processes')) {
-            uncompletedTasksSwitch = createSwitch('uncompleted', 'true', 'Только незавершенные');
-            container.appendChild(uncompletedTasksSwitch);
-        }
-
-        // --- Кнопка "Подтвердить" ---
-        const confirmButton = document.createElement('button');
+        // --- Кнопка "Подтвердить" (улучшена) ---
+        confirmButton = document.createElement('button'); // var -> let
         confirmButton.textContent = 'Подтвердить';
-        confirmButton.style.padding = '10px 20px';
+        confirmButton.style.padding = '12px 20px'; // Увеличены отступы
         confirmButton.style.backgroundColor = '#4CAF50';
         confirmButton.style.color = 'white';
         confirmButton.style.border = 'none';
-        confirmButton.style.borderRadius = '5px';
+        confirmButton.style.borderRadius = '6px'; // Более закругленные углы
         confirmButton.style.cursor = 'pointer';
         confirmButton.style.fontSize = '16px';
         confirmButton.style.marginTop = '20px';
+        confirmButton.style.width = '100%'; // На всю ширину
+        confirmButton.style.fontWeight = 'bold'; // Жирный шрифт
+        confirmButton.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)'; // Тень
+        confirmButton.style.transition = 'background-color 0.3s, transform 0.1s'; // Плавные переходы
+
+        // Эффекты нажатия
+        confirmButton.addEventListener('mousedown', () => {
+            confirmButton.style.transform = 'scale(0.98)';
+        });
+        confirmButton.addEventListener('mouseup', () => {
+            confirmButton.style.transform = 'scale(1)';
+        });
+        confirmButton.addEventListener('mouseleave', () => {
+            confirmButton.style.transform = 'scale(1)';
+        });
+        confirmButton.addEventListener('mouseenter', () => {
+            confirmButton.style.backgroundColor = '#45a049';
+        });
+        confirmButton.addEventListener('mouseleave', () => {
+            confirmButton.style.backgroundColor = '#4CAF50';
+        });
+
         confirmButton.disabled = true; // По умолчанию отключена
 
-        // --- Кнопка "Отмена" ---
+        // --- Кнопка "Отмена" (улучшена) ---
         const cancelButton = document.createElement('button');
         cancelButton.textContent = 'Отмена';
-        cancelButton.style.padding = '10px 20px';
+        cancelButton.style.padding = '12px 20px';
         cancelButton.style.backgroundColor = '#f44336';
         cancelButton.style.color = 'white';
         cancelButton.style.border = 'none';
-        cancelButton.style.borderRadius = '5px';
+        cancelButton.style.borderRadius = '6px';
         cancelButton.style.cursor = 'pointer';
         cancelButton.style.fontSize = '16px';
-        cancelButton.style.marginTop = '20px';
-        cancelButton.style.marginLeft = '10px';
+        cancelButton.style.marginTop = '12px'; // Уменьшен отступ
+        cancelButton.style.width = '100%';
+        cancelButton.style.fontWeight = 'bold';
+        cancelButton.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
+        cancelButton.style.transition = 'background-color 0.3s, transform 0.1s';
 
-        // --- Контейнер для кнопок ---
-        const buttonContainer = document.createElement('div');
-        buttonContainer.style.display = 'flex';
-        buttonContainer.style.justifyContent = 'space-between';
-        buttonContainer.appendChild(confirmButton);
-        buttonContainer.appendChild(cancelButton);
-        modal.appendChild(buttonContainer);
-
-        // Добавляем модальное окно на страницу
-        document.body.appendChild(modal);
+        cancelButton.addEventListener('mousedown', () => {
+            cancelButton.style.transform = 'scale(0.98)';
+        });
+        cancelButton.addEventListener('mouseup', () => {
+            cancelButton.style.transform = 'scale(1)';
+        });
+        cancelButton.addEventListener('mouseleave', () => {
+            cancelButton.style.transform = 'scale(1)';
+        });
+        cancelButton.addEventListener('mouseenter', () => {
+            cancelButton.style.backgroundColor = '#d32f2f';
+        });
+        cancelButton.addEventListener('mouseleave', () => {
+            cancelButton.style.backgroundColor = '#f44336';
+        });
 
         // --- Обработчики событий для обновления состояния кнопки "Подтвердить" ---
         function updateConfirmButtonState() {
@@ -501,18 +603,25 @@
                 sfSwitch.querySelector('input').checked ||
                 ufSwitch.querySelector('input').checked ||
                 cfSwitch.querySelector('input').checked;
-
             confirmButton.disabled = !hasSelection;
+            // Изменение стиля disabled
+            if (confirmButton.disabled) {
+                confirmButton.style.backgroundColor = '#cccccc';
+                confirmButton.style.cursor = 'not-allowed';
+            } else {
+                confirmButton.style.backgroundColor = '#4CAF50';
+                confirmButton.style.cursor = 'pointer';
+            }
         }
 
         [southSwitch, volgaSwitch, szSwitch, skSwitch, dvfSwitch, sfSwitch, ufSwitch, cfSwitch, selectBranchSwitch].forEach(switchEl => {
-            switchEl.querySelector('input').addEventListener('change', updateConfirmButtonState);
+            const input = switchEl.querySelector('input');
+            input.addEventListener('change', updateConfirmButtonState);
         });
 
         // --- Обработчик кнопки "Подтвердить" ---
         confirmButton.addEventListener('click', () => {
             selectedFilters = [];
-
             if (selectBranchSwitch.querySelector('input').checked) {
                 const selectedBranches = Array.from(branchSelect.selectedOptions).map(option => option.value);
                 if (selectedBranches.length > 0) {
@@ -531,331 +640,265 @@
                 if (ufSwitch.querySelector('input').checked) selectedFilters.push(ufSwitch.querySelector('input').value);
                 if (cfSwitch.querySelector('input').checked) selectedFilters.push(cfSwitch.querySelector('input').value);
             }
-
-            const uncompletedTasks = uncompletedTasksSwitch?.querySelector('input').checked || false;
-            console.log(`🔍 Выбран фильтр "Только незавершенные": ${uncompletedTasks}`);
-            showBanner(`🔍 Выбран фильтр "Только незавершенные": ${uncompletedTasks}`, 'info')
             document.body.removeChild(modal);
-            extractData(uncompletedTasks);
+            extractData(); // Убран параметр uncompletedTasks
         });
 
         // --- Обработчик кнопки "Отмена" ---
         cancelButton.addEventListener('click', () => {
             document.body.removeChild(modal);
         });
+
+        modal.appendChild(confirmButton);
+        modal.appendChild(cancelButton);
+
+        document.body.appendChild(modal);
     }
 
-    // Функция для извлечения данных в зависимости от URL
-    function extractData(uncompletedTasks) {
+
+    // === Функция для извлечения данных (упрощена) ===
+    function extractData() { // Убран параметр uncompletedTasks
         if (window.location.href.includes('/projects')) {
             extractProjectData();
-        } else if (window.location.href.includes('/processes')) {
-            extractTaskData(uncompletedTasks);
         } else {
-            alert('❌ Неизвестная страница. Скрипт работает только на /projects или /processes.');
+            // Убираем обработку /processes
+            alert('❌ Скрипт работает только на странице /projects.');
         }
     }
 
-    // Функция для получения количества проектов
+    // === Функция для получения количества проектов (без изменений) ===
     async function extractProjectData() {
         if (!axios) {
             console.error('❌ Axios не загружен');
             alert('Axios не загружен');
             return;
         }
-
         const filter_branch = selectedFilters.join(',').replace(/,$/, '');
         const url = `https://dmc.beeline.ru/api/projects/projects/?page=1&page_size=1&branch=${filter_branch}`;
         const token = findToken();
-
         if (!token) {
             console.error('❌ Токен не найден');
             showBanner('❌ Токен не найден', 'error');
             alert('Токен не найден');
             return;
         }
-
         try {
             const response = await axios.get(url, { headers: { 'Authorization': `Bearer ${token}` } });
             const totalItems = response.data.count;
             console.log(`🔍 Найдено ${totalItems} проектов`);
             showBanner(`🔍 Найдено ${totalItems} проектов`, 'info');
-            fetchProjects(totalItems);
+            fetchProjects(totalItems); // Передаем общее количество
         } catch (error) {
             console.error('❌ Ошибка при получении количества проектов:', error);
-            showBanner('❌ Ошибка при получении количества проектов:', 'error');
+            showBanner('❌ Ошибка при получении количества проектов', 'error'); // Убрана детализация ошибки в баннер
             alert('Не удалось получить количество проектов');
         }
     }
 
-    // Функция для получения количества задач
-    async function extractTaskData(uncompletedTasks) {
-        if (!axios) {
-            console.error('❌ Axios не загружен');
-            alert('Axios не загружен');
-            return;
-        }
-
-        const filter_branch = selectedFilters.join(',').replace(/,$/, '');
-        const url = `https://dmc.beeline.ru/api/processes/tasks/?gpo=&page=1&page_size=1&branch=${filter_branch}&uncompleted_tasks=${uncompletedTasks}`;
-        const token = findToken();
-
-        if (!token) {
-            console.error('❌ Токен не найден');
-            showBannerconsole.error('❌ Токен не найден', 'error');
-            alert('Токен не найден');
-            return;
-        }
-
-        try {
-            const response = await axios.get(url, { headers: { 'Authorization': `Bearer ${token}` } });
-            const totalItems = response.data.count;
-            console.log(`🔍 Найдено ${totalItems} задач (${uncompletedTasks ? 'только незавершенные' : 'все'})`);
-            showBanner(`🔍 Найдено ${totalItems} задач (${uncompletedTasks ? 'только незавершенные' : 'все'})`, 'info');
-            fetchTasks(totalItems, uncompletedTasks);
-        } catch (error) {
-            console.error('❌ Ошибка при получении количества задач:', error);
-            showBanner('❌ Ошибка при получении количества задач:', 'error');
-            alert('Не удалось получить количество задач');
-        }
-    }
-
-    // Функция для получения всех проектов
+    // === Функция для получения всех проектов (улучшена) ===
     async function fetchProjects(totalItems) {
         const token = findToken();
-        if (!token) return console.error('❌ Токен не найден');
+        if (!token) {
+            console.error('❌ Токен не найден');
+            showBanner('❌ Токен не найден', 'error');
+            return;
+        }
 
         const filter_branch = selectedFilters.join(',').replace(/,$/, '');
-        const url = `https://dmc.beeline.ru/api/projects/projects/?page=1&page_size=${totalItems}&branch=${filter_branch}`;
+        const PAGE_SIZE = 1000; // Размер страницы для параллельных запросов
+        const totalPages = Math.ceil(totalItems / PAGE_SIZE);
+        console.log(`🚀 Запрашиваем проекты: всего ${totalItems}, страниц: ${totalPages}`);
+        showBanner(`🚀 Подготовка к загрузке ${totalItems} проектов...`, 'progress', 0, true);
 
-        console.log(`🚀 Запрашиваем проекты: ${url}`);
-        showBanner(`🚀 Запрашиваем проекты`, 'info');
+        // Создаем массив промисов для всех страниц
+        const promises = [];
+        for (let page = 1; page <= totalPages; page++) {
+            const url = `https://dmc.beeline.ru/api/projects/projects/?page=${page}&page_size=${PAGE_SIZE}&branch=${filter_branch}`;
+            const promise = axios.get(url, { headers: { 'Authorization': `Bearer ${token}` } })
+                .then(response => {
+                    updateProgressBanner(`🚀 Загрузка... ${page}/${totalPages}`);
+                    return response.data.results;
+                })
+                .catch(error => {
+                    console.error(`❌ Ошибка загрузки страницы ${page}:`, error);
+                    // Можно выбрасывать ошибку или возвращать пустой массив
+                    throw new Error(`Ошибка загрузки страницы ${page}`);
+                });
+            promises.push(promise);
+        }
 
         try {
-            const response = await axios.get(url, { headers: { 'Authorization': `Bearer ${token}` } });
-            const data = response.data.results;
+            // Выполняем все запросы параллельно
+            const resultsArrays = await Promise.all(promises);
 
-            if (data && data.length > 0) {
-                console.log(`✅ Данные о проектах получены (${data.length} записей)`);
-                showBanner(`✅ Данные о проектах получены (${data.length} записей)`, 'success');
-                const tableHTML = createTableFromData(data, 'project');
+            // Объединяем все результаты в один массив
+            const allData = [].concat(...resultsArrays);
+
+            if (allData && allData.length > 0) {
+                console.log(`✅ Данные о проектах получены (${allData.length} записей)`);
+                showBanner(`✅ Данные о проектах получены (${allData.length} записей)`, 'success');
+                const tableHTML = createTableFromData(allData, 'project');
                 const processedTableHTML = processTable(tableHTML, 'project');
-                copyToClipboard(processedTableHTML);
+
+                // Используем улучшенную функцию копирования
+                await copyToClipboardRobust(processedTableHTML);
+
                 alert('📋 Данные скопированы в буфер обмена. Вставьте их в Excel.');
             } else {
                 alert('⚠️ Нет данных для отображения.');
             }
         } catch (error) {
             console.error('❌ Ошибка при получении данных о проектах:', error);
-            showBanner('❌ Ошибка при получении данных о проектах:', 'error');
+            showBanner('❌ Ошибка при загрузке данных о проектах', 'error');
             alert('Не удалось получить данные о проектах');
+        } finally {
+            hideProgressBanner();
         }
     }
 
-    // Функция для получения всех задач
-    async function fetchTasks(totalItems, uncompletedTasks) {
-        const token = findToken();
-        if (!token) return console.error('❌ Токен не найден');
 
-        const filter_branch = selectedFilters.join(',').replace(/,$/, '');
-        const url = `https://dmc.beeline.ru/api/processes/tasks/?gpo=&page=1&page_size=${totalItems}&branch=${filter_branch}&uncompleted_tasks=${uncompletedTasks}`;
-
-        console.log(`🚀 Запрашиваем задачи: ${url}`);
-        showBanner(`🚀 Запрашиваем задачи...`, 'info');
-
-        try {
-            const response = await axios.get(url, { headers: { 'Authorization': `Bearer ${token}` } });
-            const data = response.data.results;
-
-            if (data && data.length > 0) {
-                console.log(`✅ Данные о задачах получены (${data.length} записей)`);
-                showBanner(`✅ Данные о задачах получены (${data.length} записей)`, 'success');
-                const tableHTML = createTableFromData(data, 'task');
-                const processedTableHTML = processTable(tableHTML, 'task');
-                copyToClipboard(processedTableHTML);
-                alert('📋 Данные скопированы в буфер обмена. Вставьте их в Excel.');
-            } else {
-                alert('⚠️ Нет данных для отображения.');
-            }
-        } catch (error) {
-            console.error('❌ Ошибка при получении данных о задачах:', error);
-            showBanner('❌ Ошибка при получении данных о задачах:', 'error');
-            alert('Не удалось получить данные о задачах');
+    // === Функция для создания таблицы из данных (без изменений) ===
+    function createTableFromData(data, type) {
+        // ... (оставляем как есть) ...
+        const table = document.createElement('table');
+        table.setAttribute('cellspacing', '0');
+        table.setAttribute('class', 'style__TableStyled-sc-1c82g3t-0 cobzxA');
+        let headers = [];
+        if (type === 'project') {
+            headers = [
+                'region',
+                'branch',
+                'project_ext_id',
+                'id',
+                'bs_number',
+                'bs_name',
+                'address',
+                'types_project',
+                'types_places_hardware',
+                'places_hardware',
+                'places_antenna',
+                'capex',
+                'hight_object',
+                'open_date',
+                'years',
+                'bs_gfk',
+                'rru_gfk',
+                'geo',
+                'route_LL',
+                'route_PPO',
+                'statuses_project',
+                'pos_code',
+                'prime_contractors',
+                'comment'
+            ];
         }
-    }
-
-    // Функция для создания таблицы из данных
-function createTableFromData(data, type) {
-    const table = document.createElement('table');
-    table.setAttribute('cellspacing', '0');
-    table.setAttribute('class', 'style__TableStyled-sc-1c82g3t-0 cobzxA');
-
-    let headers = [];
-
-    if (type === 'project') {
-        headers = [
-            'region',
-            'branch',
-            'project_ext_id',
-            'id',
-            'bs_number',
-            'bs_name',
-            'address',
-            'types_project',
-            'types_places_hardware',
-            'places_hardware',
-            'places_antenna',
-            'capex',
-            'hight_object',
-            'open_date',
-            'years',
-            'bs_gfk',
-            'rru_gfk',
-            'geo',
-            'route_LL',
-            'route_PPO',
-            'statuses_project',
-            'pos_code',
-            'prime_contractors',
-            'comment'
-        ];
-    } else if (type === 'task') {
-        headers = [
-            'name',
-            'number',
-            'replay',
-            'object_number',
-            'object_name',
-            'object_status_name',
-            'created_at',
-            'user_position',
-            'user_short_name',
-            'project_number',
-            'bs_number',
-            'bs_name',
-            'bs_address',
-            'project_type',
-            'gfk',
-            'branch',
-            'region',
-            'status'
-        ];
-    }
-
-    const headerRow = document.createElement('tr');
-    headerRow.setAttribute('class', 'style__TableStringStyled-sc-1c82g3t-1 hwrWAV');
-
-    headers.forEach(header => {
-        const th = document.createElement('td');
-        th.setAttribute('width', 'calc(110 / 1900 * 100%)');
-        th.setAttribute('class', 'style__TableCellStyled-sc-1c82g3t-3 euagwJ');
-        const div = document.createElement('div');
-        div.setAttribute('class', 'style__TableHeadStyled-sc-1c82g3t-4 cjYqEH');
-        const span = document.createElement('span');
-        span.setAttribute('class', 'dsb_typography dsb_typography__subtitle3');
-        span.textContent = header;
-        div.appendChild(span);
-        th.appendChild(div);
-        headerRow.appendChild(th);
-    });
-
-    table.appendChild(headerRow);
-
-    data.forEach(item => {
-        const row = document.createElement('tr');
-        row.setAttribute('class', 'style__TableStringStyled-sc-1c82g3t-1 hwrWAV style__ProjectString-sc-hfirfp-1 hNFYXu');
-
+        // Убрана обработка 'task'
+        // ... (остальной код без изменений) ...
+         const headerRow = document.createElement('tr');
+        headerRow.setAttribute('class', 'style__TableStringStyled-sc-1c82g3t-1 hwrWAV');
         headers.forEach(header => {
-            const td = document.createElement('td');
-            td.setAttribute('class', 'style__TableCellStyled-sc-1c82g3t-3 lguZrP');
+            const th = document.createElement('td');
+            th.setAttribute('width', 'calc(110 / 1900 * 100%)');
+            th.setAttribute('class', 'style__TableCellStyled-sc-1c82g3t-3 euagwJ');
             const div = document.createElement('div');
-            div.setAttribute('class', 'style__TableCellContentStyled-sc-1c82g3t-5 ePYmXN');
+            div.setAttribute('class', 'style__TableHeadStyled-sc-1c82g3t-4 cjYqEH');
             const span = document.createElement('span');
-
-            if (type === 'project') {
-                if (header === 'id') {
-                    const link = document.createElement('a');
-                    link.href = `https://dmc.beeline.ru/projects/${item.id}`;
-                    link.textContent = ' 🔗 '; //item.id;
-                    span.appendChild(link);
-                } else if (header === 'geo') {
-                    const match = item[header]?.match(/\(([^)]+)\)/);
-                    if (match) {
-                        const coords = match[1].split(' ');
-                        const lat = coords[0];
-                        const lng = coords[1];
-                        const link = document.createElement('a');
-                        link.href = `https://yandex.ru/maps/?pt=${lat},${lng}&z=16&l=skl`;
-                        link.textContent = `${lat}, ${lng}`;
-                        span.appendChild(link);
-                    } else {
-                        span.textContent = item[header] || '';
-                    }
-                } else if (header === 'route_LL' || header === 'route_PPO') {
-                    const branchName = item.branch;
-                    const branchCoords = branchCoordinates[branchName];
-                    const geoMatch = item.geo?.match(/\(([^)]+)\)/);
-                    let projectCoords = '';
-                    if (geoMatch) {
-                        const coords = geoMatch[1].split(' ');
-                        const lat = coords[0];
-                        const lng = coords[1];
-                        projectCoords = `${lng},${lat}`;
-                    }
-
-                    if (header === 'route_LL') {
-                        if (branchCoords && branchCoords.delivery && projectCoords) {
-                            const deliveryCoords = branchCoords.delivery.split(',').map(c => c.trim());
-                            const url = `https://yandex.ru/maps/?rtext=${deliveryCoords[0]},${deliveryCoords[1]}~${projectCoords}&mode=routes&routes%5Bavoid%5D=tolls%2Cunpaved%2Cpoor_condition&rtm=atm&rtt=auto&ruri=~`;
-                            const link = document.createElement('a');
-                            link.href = url;
-                            link.textContent = '🔗 🚛 '//'Доставка ->>>';
-                            link.target = '_blank';
-                            span.appendChild(link);
-                        } else {
-                            span.textContent = '';
-                        }
-                    } else if (header === 'route_PPO') {
-                        if (branchCoords && branchCoords.survey && projectCoords) {
-                            const surveyCoords = branchCoords.survey.split(',').map(c => c.trim());
-                            const url = `https://yandex.ru/maps/?rtext=${surveyCoords[0]},${surveyCoords[1]}~${projectCoords}&mode=routes&routes%5Bavoid%5D=tolls%2Cunpaved%2Cpoor_condition&rtm=atm&rtt=auto&ruri=~`;
-                            const link = document.createElement('a');
-                            link.href = url;
-                            link.textContent = '🔗 🔍 '//'Обследование ->>>';
-                            link.target = '_blank';
-                            span.appendChild(link);
-                        } else {
-                            span.textContent = '';
-                        }
-                    } else {
-                        span.textContent = item[header] || '';
-                    }
-                } else if (header === 'hight_object') {
-                    span.textContent = item[header] ? item[header].toString().replace('.', ',') : '';
-                } else {
-                    span.textContent = item[header] || '';
-                }
-            } else {
-                span.textContent = item[header] || '';
-            }
-
+            span.setAttribute('class', 'dsb_typography dsb_typography__subtitle3');
+            span.textContent = header;
             div.appendChild(span);
-            td.appendChild(div);
-            row.appendChild(td);
+            th.appendChild(div);
+            headerRow.appendChild(th);
         });
+        table.appendChild(headerRow);
 
-        table.appendChild(row);
-    });
+        data.forEach(item => {
+            const row = document.createElement('tr');
+            row.setAttribute('class', 'style__TableStringStyled-sc-1c82g3t-1 hwrWAV style__ProjectString-sc-hfirfp-1 hNFYXu');
+            headers.forEach(header => {
+                const td = document.createElement('td');
+                td.setAttribute('class', 'style__TableCellStyled-sc-1c82g3t-3 lguZrP');
+                const div = document.createElement('div');
+                div.setAttribute('class', 'style__TableCellContentStyled-sc-1c82g3t-5 ePYmXN');
+                const span = document.createElement('span');
+                if (type === 'project') {
+                    if (header === 'id') {
+                        const link = document.createElement('a');
+                        link.href = `https://dmc.beeline.ru/projects/${item.id}`;
+                        link.textContent = ' 🔗 ';
+                        span.appendChild(link);
+                    } else if (header === 'geo') {
+                        const match = item[header]?.match(/\(([^)]+)\)/);
+                        if (match) {
+                            const coords = match[1].split(' ');
+                            const lat = coords[0];
+                            const lng = coords[1];
+                            const link = document.createElement('a');
+                            link.href = `https://yandex.ru/maps/?pt=${lat},${lng}&z=16&l=skl`;
+                            link.textContent = `${lat}, ${lng}`;
+                            span.appendChild(link);
+                        } else {
+                            span.textContent = item[header] || '';
+                        }
+                    } else if (header === 'route_LL' || header === 'route_PPO') {
+                        const branchName = item.branch;
+                        const branchCoords = branchCoordinates[branchName];
+                        const geoMatch = item.geo?.match(/\(([^)]+)\)/);
+                        let projectCoords = '';
+                        if (geoMatch) {
+                            const coords = geoMatch[1].split(' ');
+                            const lat = coords[0];
+                            const lng = coords[1];
+                            projectCoords = `${lng},${lat}`;
+                        }
+                        if (header === 'route_LL') {
+                            if (branchCoords && branchCoords.delivery && projectCoords) {
+                                const deliveryCoords = branchCoords.delivery.split(',').map(c => c.trim());
+                                const url = `https://yandex.ru/maps/?rtext=${deliveryCoords[0]},${deliveryCoords[1]}~${projectCoords}&mode=routes&routes%5Bavoid%5D=tolls%2Cunpaved%2Cpoor_condition&rtm=atm&rtt=auto&ruri=~`;
+                                const link = document.createElement('a');
+                                link.href = url;
+                                link.textContent = '🔗 🚛 ';
+                                link.target = '_blank';
+                                span.appendChild(link);
+                            } else {
+                                span.textContent = '';
+                            }
+                        } else if (header === 'route_PPO') {
+                            if (branchCoords && branchCoords.survey && projectCoords) {
+                                const surveyCoords = branchCoords.survey.split(',').map(c => c.trim());
+                                const url = `https://yandex.ru/maps/?rtext=${surveyCoords[0]},${surveyCoords[1]}~${projectCoords}&mode=routes&routes%5Bavoid%5D=tolls%2Cunpaved%2Cpoor_condition&rtm=atm&rtt=auto&ruri=~`;
+                                const link = document.createElement('a');
+                                link.href = url;
+                                link.textContent = '🔗 🔍 ';
+                                link.target = '_blank';
+                                span.appendChild(link);
+                            } else {
+                                span.textContent = '';
+                            }
+                        } else {
+                            span.textContent = item[header] || '';
+                        }
+                    } else if (header === 'hight_object') {
+                        span.textContent = item[header] ? item[header].toString().replace('.', ',') : '';
+                    } else {
+                        span.textContent = item[header] || '';
+                    }
+                }
+                // Убрана обработка 'task'
+                div.appendChild(span);
+                td.appendChild(div);
+                row.appendChild(td);
+            });
+            table.appendChild(row);
+        });
+        return table.outerHTML;
+    }
 
-    return table.outerHTML;
-}
-
-    // Функция для обработки таблицы перед копированием
+    // === Функция для обработки таблицы перед копированием (без изменений) ===
     function processTable(tableHTML, type) {
-        const parser = new DOMParser();
+        // ... (оставляем как есть) ...
+         const parser = new DOMParser();
         const doc = parser.parseFromString(tableHTML, 'text/html');
         const table = doc.querySelector('table');
-
         const rows = table.querySelectorAll('tr');
         rows.forEach(row => {
             const cells = row.querySelectorAll('td');
@@ -864,11 +907,10 @@ function createTableFromData(data, type) {
                     if (cells[i]) cells[i].remove();
                 }
             }
+            // Убрана обработка 'task'
         });
-
         const headerRow = table.querySelector('tr');
         const headerCells = headerRow.querySelectorAll('td');
-
         const newHeaders = type === 'project' ? [
             'Регион',
             'Филиал',
@@ -895,65 +937,156 @@ function createTableFromData(data, type) {
             'Основной ГПО',
             'Комментарий'
         ] : [
-            'Задача',
-            '№ Задачи',
-            'Повтор задачи',
-            '№ Документа',
-            'Тип документа',
-            'Статус документа',
-            'Создано',
-            'Должность исполнителя',
-            'Исполнитель',
-            '№ проекта',
-            '№ БС',
-            'Название БС',
-            'Адрес БС',
-            'Тип проекта',
-            'Код ГФК',
-            'Филиал',
-            'Регион',
-            'Статус'
+            // Убраны заголовки для 'task'
         ];
-
         headerCells.forEach((cell, index) => {
             if (index < newHeaders.length) {
                 const span = cell.querySelector('span');
                 if (span) span.textContent = newHeaders[index];
             }
         });
-
         return table.outerHTML;
     }
 
-    // Функция для копирования текста в буфер обмена
-    function copyToClipboard(text) {
-        navigator.clipboard.writeText(text).then(() => {
-            console.log('📋 Текст скопирован в буфер обмена');
+    // === Улучшенная функция копирования в буфер обмена ===
+    async function copyToClipboardRobust(text) {
+        try {
+            // Сначала пытаемся использовать современный API
+            await navigator.clipboard.writeText(text);
+            console.log('📋 Текст скопирован в буфер обмена (Clipboard API)');
             showBanner('📋 Текст скопирован в буфер обмена', 'success');
-        }).catch(err => {
-            console.error('❌ Ошибка при копировании в буфер обмена:', err);
-            showBanner('❌ Ошибка при копировании в буфер обмена:', 'error');
-        });
+            return;
+        } catch (err) {
+            console.warn('⚠️ Clipboard API не сработал, пробуем execCommand...', err);
+            // Резервный метод: создание временного элемента и execCommand
+            const textArea = document.createElement("textarea");
+            textArea.value = text;
+
+            // ⚠️ ВАЖНО: Скрываем элемент, но делаем его видимым для execCommand
+            // Установка стилей для "offscreen" копирования
+            textArea.style.position = 'fixed';
+            textArea.style.top = '-1000px'; // Выносим за пределы экрана
+            textArea.style.left = '-1000px';
+            textArea.style.opacity = '0';
+            textArea.style.pointerEvents = 'none';
+            textArea.style.zIndex = '-1';
+
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+
+            try {
+                const successful = document.execCommand('copy');
+                document.body.removeChild(textArea);
+                if (successful) {
+                    console.log('📋 Текст скопирован в буфер обмена (execCommand)');
+                    showBanner('📋 Текст скопирован в буфер обмена', 'success');
+                } else {
+                    throw new Error('execCommand returned false');
+                }
+            } catch (execErr) {
+                document.body.removeChild(textArea);
+                console.error('❌ Ошибка при копировании в буфер обмена (execCommand):', execErr);
+                showBanner('❌ Ошибка при копировании в буфер обмена. Попробуйте вручную.', 'error');
+                // Можно показать модальное окно с данными для ручного копирования
+                showFallbackCopyDialog(text);
+            }
+        }
     }
 
-    // Функция для загрузки списка филиалов через API
+    // Функция показа диалога для ручного копирования
+    function showFallbackCopyDialog(text) {
+        const dialog = document.createElement('div');
+        dialog.style.position = 'fixed';
+        dialog.style.top = '50%';
+        dialog.style.left = '50%';
+        dialog.style.transform = 'translate(-50%, -50%)';
+        dialog.style.backgroundColor = 'white';
+        dialog.style.padding = '20px';
+        dialog.style.borderRadius = '8px';
+        dialog.style.boxShadow = '0 4px 15px rgba(0,0,0,0.3)';
+        dialog.style.zIndex = '10001';
+        dialog.style.maxWidth = '90%';
+        dialog.style.maxHeight = '90%';
+        dialog.style.display = 'flex';
+        dialog.style.flexDirection = 'column';
+
+        const title = document.createElement('h4');
+        title.textContent = 'Ошибка копирования';
+        title.style.marginTop = '0';
+
+        const message = document.createElement('p');
+        message.textContent = 'Не удалось автоматически скопировать данные. Скопируйте их вручную из поля ниже:';
+        message.style.marginBottom = '15px';
+
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.flex = '1';
+        textArea.style.minWidth = '400px';
+        textArea.style.minHeight = '200px';
+        textArea.style.marginBottom = '15px';
+        textArea.style.fontFamily = 'monospace';
+        textArea.style.fontSize = '12px';
+
+        const buttonContainer = document.createElement('div');
+        buttonContainer.style.display = 'flex';
+        buttonContainer.style.justifyContent = 'flex-end';
+        buttonContainer.style.gap = '10px';
+
+        const copyBtn = document.createElement('button');
+        copyBtn.textContent = 'Попробовать снова';
+        copyBtn.style.padding = '8px 15px';
+        copyBtn.style.backgroundColor = '#4CAF50';
+        copyBtn.style.color = 'white';
+        copyBtn.style.border = 'none';
+        copyBtn.style.borderRadius = '4px';
+        copyBtn.style.cursor = 'pointer';
+        copyBtn.addEventListener('click', () => {
+            dialog.remove();
+            copyToClipboardRobust(text); // Повторная попытка
+        });
+
+        const closeBtn = document.createElement('button');
+        closeBtn.textContent = 'Закрыть';
+        closeBtn.style.padding = '8px 15px';
+        closeBtn.style.backgroundColor = '#f44336';
+        closeBtn.style.color = 'white';
+        closeBtn.style.border = 'none';
+        closeBtn.style.borderRadius = '4px';
+        closeBtn.style.cursor = 'pointer';
+        closeBtn.addEventListener('click', () => {
+            dialog.remove();
+        });
+
+        buttonContainer.appendChild(copyBtn);
+        buttonContainer.appendChild(closeBtn);
+
+        dialog.appendChild(title);
+        dialog.appendChild(message);
+        dialog.appendChild(textArea);
+        dialog.appendChild(buttonContainer);
+
+        document.body.appendChild(dialog);
+        textArea.select(); // Выделяем текст для удобства
+    }
+
+
+    // === Функция для загрузки списка филиалов через API (без изменений) ===
     async function loadBranches() {
-        const token = findToken();
+        // ... (оставляем как есть) ...
+         const token = findToken();
         if (!token) {
             console.error('❌ Токен не найден');
             showBanner('❌ Токен не найден', 'error');
             alert('Токен не найден');
             return;
         }
-
         try {
             const response = await axios.get('https://dmc.beeline.ru/api/catalogs/branches/?region=', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const branches = response.data;
-
-            branchSelect.innerHTML = ''; // Очистка предыдущих опций
-
+            branchSelect.innerHTML = '';
             branches.forEach(branch => {
                 const option = document.createElement('option');
                 option.value = branch.id;
@@ -962,15 +1095,16 @@ function createTableFromData(data, type) {
             });
         } catch (error) {
             console.error('Ошибка при загрузке филиалов:', error);
-            showBanner('❌ Ошибка при загрузке филиалов:', 'error');
+            showBanner('❌ Ошибка при загрузке филиалов', 'error');
             alert('Не удалось загрузить список филиалов');
         }
     }
 
-    // Создание кнопки и запуск скрипта
+    // === Создание кнопки и запуск скрипта ===
     loadAxios()
         .then(() => {
             createButton();
+             console.log('✅ Скрипт Beeline DMC Extractor v7.5.0 готов к работе!');
         })
         .catch(err => {
             console.error('❌ Axios не загружен:', err);
